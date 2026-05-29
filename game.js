@@ -209,7 +209,6 @@ async function loadNationData() {
             await processPendingAttacks();
             await loadAllNations();
             updateUI();
-            // Inicializar el mapa después de un breve retraso
             setTimeout(initMap, 800);
         } else {
             console.error("❌ Nación no encontrada");
@@ -226,10 +225,7 @@ async function loadNationData() {
 function initMap() {
     if (!currentNation) return;
     const mapDiv = document.getElementById('map');
-    if (!mapDiv) {
-        console.error("❌ Contenedor de mapa no encontrado en el DOM");
-        return;
-    }
+    if (!mapDiv) return;
 
     const coords = {
         'Chile': [-35.6751, -71.543],
@@ -256,33 +252,23 @@ function initMap() {
 
     const center = coords[currentNation.territorio] || [20, 0];
 
-    // Si ya existe una instancia de mapa, eliminarla para recrearla (limpieza total)
     if (map) {
         map.remove();
         map = null;
     }
 
     try {
-        console.log("📍 Inicializando mapa en:", currentNation.territorio);
-        map = L.map('map', {
-            zoomControl: true,
-            scrollWheelZoom: true
-        }).setView(center, 4);
-
+        map = L.map('map').setView(center, 4);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; OpenStreetMap contributors',
             maxZoom: 19
         }).addTo(map);
-
         L.marker(center).addTo(map)
             .bindPopup(`<b>${currentNation.nombre}</b><br>${currentNation.territorio}`)
             .openPopup();
-            
-        // Forzar actualización de tamaño
         setTimeout(() => map.invalidateSize(), 200);
-        console.log("✅ Mapa Leaflet cargado correctamente");
     } catch (e) {
-        console.error("❌ Error crítico en Leaflet:", e);
+        console.error("❌ Error en Leaflet:", e);
     }
 }
 
@@ -372,7 +358,7 @@ function calculatePassiveProduction() {
 
 async function recruitUnit(unitType) {
     const costs = { soldados: 50, tanques: 500, aviones: 2000 };
-    if (currentNation.dinero < costs[unitType]) { alert('❌ ' + t('dineroInsuficiente')); return; }
+    if (currentNation.dinero < costs[unitType]) { alert('❌ Dinero insuficiente'); return; }
     try {
         await updateDoc(doc(db, "naciones", currentUser), {
             dinero: currentNation.dinero - costs[unitType],
@@ -391,7 +377,7 @@ function calculateMilitaryPower(nation) {
 }
 
 async function attackNation(targetId) {
-    if (calculateMilitaryPower(currentNation) === 0) { alert('❌ ' + t('noUnidades')); return; }
+    if (calculateMilitaryPower(currentNation) === 0) { alert('❌ No tienes unidades militares'); return; }
     const target = allNations.find(n => n.id === targetId);
     if (!target || targetId === currentUser) return;
     try {
@@ -400,7 +386,7 @@ async function attackNation(targetId) {
             nombre_atacante: currentNation.nombre, nombre_defensor: target.nombre,
             tropas_enviadas: currentNation.ejercito, fecha_ataque: new Date(), procesado: false
         });
-        alert(`✅ ${t('ataqueLanzado')} contra ${target.nombre}`);
+        alert(`✅ Ataque lanzado contra ${target.nombre}`);
         await loadNationData();
     } catch (e) { console.error(e); }
 }
@@ -453,7 +439,6 @@ async function buildCity() {
 
 function changeLanguage(lang) {
     currentLanguage = lang;
-    document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.lang === lang));
     updateUI();
 }
 
@@ -461,12 +446,7 @@ function switchTab(tabName) {
     document.querySelectorAll('.tab-content').forEach(tab => tab.classList.toggle('active', tab.id === tabName));
     document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.toggle('active', btn.getAttribute('onclick').includes(tabName)));
     if (tabName === 'war') updateRankingDisplay();
-    if (tabName === 'overview' && map) {
-        setTimeout(() => {
-            map.invalidateSize();
-            console.log("🔄 Redibujando mapa...");
-        }, 300);
-    }
+    if (tabName === 'overview' && map) setTimeout(() => map.invalidateSize(), 300);
 }
 
 function updateRankingDisplay() {
