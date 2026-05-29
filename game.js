@@ -230,7 +230,7 @@ async function loadNationData() {
             console.error("❌ Nación no encontrada");
         }
     } catch (error) {
-        console.error("❌ Error cargando datos:", error.message);
+        console.error("❌ Error cargando datos:", error);
     }
 }
 
@@ -816,3 +816,4 @@ window.updateUI = updateUI;
 window.loadNationData = loadNationData;
 window.showAuthScreen = showAuthScreen;
 window.showGameScreen = showGameScreen;
+
