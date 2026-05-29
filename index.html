@@ -6,6 +6,10 @@
     <title>Rayo War - Simulador de Naciones</title>
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 </head>
 <body>
     <!-- PANTALLA DE AUTENTICACIÓN -->
@@ -147,10 +151,7 @@
                     
                     <!-- CONTENEDOR DEL MAPA -->
                     <div id="mapContainer" class="map-container">
-                        <div id="worldMap" class="world-map">
-                            <!-- Aquí se cargará el mapa -->
-                            <p>Cargando Mapa de Territorio...</p>
-                        </div>
+                        <div id="map" style="width: 100%; height: 100%; border-radius: 12px;"></div>
                     </div>
 
                     <div class="info-grid">
