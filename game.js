@@ -140,13 +140,17 @@ async function handleLogout() {
 }
 
 function showAuthScreen() {
-    document.getElementById('authScreen').style.display = 'flex';
-    document.getElementById('gameScreen').style.display = 'none';
+    const authScreen = document.getElementById('authScreen');
+    const gameScreen = document.getElementById('gameScreen');
+    if (authScreen) authScreen.style.display = 'flex';
+    if (gameScreen) gameScreen.style.display = 'none';
 }
 
 function showGameScreen() {
-    document.getElementById('authScreen').style.display = 'none';
-    document.getElementById('gameScreen').style.display = 'flex';
+    const authScreen = document.getElementById('authScreen');
+    const gameScreen = document.getElementById('gameScreen');
+    if (authScreen) authScreen.style.display = 'none';
+    if (gameScreen) gameScreen.style.display = 'flex';
 }
 
 // ======================
@@ -202,14 +206,17 @@ function calculateMilitaryPower(nation) {
 }
 
 function calculatePassiveProduction() {
+    if (!currentNation || !currentNation.ultima_conexion) return;
     const lastConnection = currentNation.ultima_conexion.toDate ? currentNation.ultima_conexion.toDate() : new Date(currentNation.ultima_conexion);
     const minutes = (new Date() - lastConnection) / (1000 * 60);
     
-    currentNation.dinero += (currentNation.edificios.factories * 5) * minutes;
-    currentNation.recursos_especiales.energy += (currentNation.edificios.powerPlants * 2) * minutes;
-    currentNation.recursos_especiales.food += (currentNation.edificios.farms * 3) * minutes;
-    currentNation.recursos_especiales.minerals += (currentNation.edificios.mines * 2) * minutes;
-    currentNation.recursos_especiales.oil += (currentNation.edificios.refineries * 1.5) * minutes;
+    if (currentNation.edificios) {
+        currentNation.dinero += (currentNation.edificios.factories * 5) * minutes;
+        currentNation.recursos_especiales.energy += (currentNation.edificios.powerPlants * 2) * minutes;
+        currentNation.recursos_especiales.food += (currentNation.edificios.farms * 3) * minutes;
+        currentNation.recursos_especiales.minerals += (currentNation.edificios.mines * 2) * minutes;
+        currentNation.recursos_especiales.oil += (currentNation.edificios.refineries * 1.5) * minutes;
+    }
 }
 
 // ======================
@@ -261,7 +268,7 @@ async function upgradeBuilding(type) {
 }
 
 async function upgradeService(type) {
-    if (currentNation.ciudades.length === 0) { alert(translations[currentLanguage].cityRequired); return; }
+    if (!currentNation.ciudades || currentNation.ciudades.length === 0) { alert(translations[currentLanguage].cityRequired); return; }
     const costs = { hospitals: 800, police: 600, firefighters: 700, schools: 500 };
     if (currentNation.dinero < costs[type]) { alert(translations[currentLanguage].insufficientMoney); return; }
 
@@ -286,7 +293,7 @@ async function buildCity() {
     const cityName = prompt(currentLanguage === 'es' ? "Nombre de la ciudad:" : "City Name:");
     if (!cityName) return;
 
-    const newCities = [...currentNation.ciudades, { name: cityName, population: 100 }];
+    const newCities = [...(currentNation.ciudades || []), { name: cityName, population: 100 }];
 
     try {
         await updateDoc(doc(db, "naciones", currentUser), {
@@ -333,18 +340,18 @@ function updateUI() {
     if (logoutBtn) logoutBtn.innerText = t.logout;
 
     // Actualizar Contadores Superiores
-    set('topMoney', Math.floor(currentNation.dinero));
+    set('topMoney', Math.floor(currentNation.dinero || 0));
     if (currentNation.recursos_especiales) {
-        set('topEnergy', Math.floor(currentNation.recursos_especiales.energy));
-        set('topFood', Math.floor(currentNation.recursos_especiales.food));
-        set('topMinerals', Math.floor(currentNation.recursos_especiales.minerals));
-        set('topOil', Math.floor(currentNation.recursos_especiales.oil));
+        set('topEnergy', Math.floor(currentNation.recursos_especiales.energy || 0));
+        set('topFood', Math.floor(currentNation.recursos_especiales.food || 0));
+        set('topMinerals', Math.floor(currentNation.recursos_especiales.minerals || 0));
+        set('topOil', Math.floor(currentNation.recursos_especiales.oil || 0));
     }
 
     // Sidebar
-    set('sidebarMoney', '$' + Math.floor(currentNation.dinero));
-    set('sidebarPopulation', Math.floor(currentNation.poblacion));
-    set('nationNameDisplay', currentNation.nombre);
+    set('sidebarMoney', '$' + Math.floor(currentNation.dinero || 0));
+    set('sidebarPopulation', Math.floor(currentNation.poblacion || 0));
+    set('nationNameDisplay', currentNation.nombre || "Nación");
 
     // Desbloqueo de Servicios
     const servicesTab = document.getElementById('services');
@@ -363,30 +370,30 @@ function updateUI() {
     // Ciudades
     const citiesList = document.getElementById('citiesList');
     if (citiesList) {
-        citiesList.innerHTML = currentNation.ciudades.map(c => `<div class="city-item">🏙️ ${c.name} (Pop: ${c.population})</div>`).join('') || (currentLanguage === 'es' ? "No hay ciudades" : "No cities");
+        citiesList.innerHTML = (currentNation.ciudades || []).map(c => `<div class="city-item">🏙️ ${c.name} (Pop: ${c.population})</div>`).join('') || (currentLanguage === 'es' ? "No hay ciudades" : "No cities");
     }
 
     // Niveles de Edificios
     const b = currentNation.edificios;
     if (b) {
-        set('factoriesLevel', b.factories);
-        set('powerLevel', b.powerPlants);
-        set('farmsLevel', b.farms);
-        set('minesLevel', b.mines);
-        set('refineriesLevel', b.refineries);
-        set('hospitalsLevel', b.hospitals);
-        set('policeLevel', b.police);
-        set('firefightersLevel', b.firefighters);
-        set('schoolsLevel', b.schools);
+        set('factoriesLevel', b.factories || 0);
+        set('powerLevel', b.powerPlants || 0);
+        set('farmsLevel', b.farms || 0);
+        set('minesLevel', b.mines || 0);
+        set('refineriesLevel', b.refineries || 0);
+        set('hospitalsLevel', b.hospitals || 0);
+        set('policeLevel', b.police || 0);
+        set('firefightersLevel', b.firefighters || 0);
+        set('schoolsLevel', b.schools || 0);
     }
 
     // Ejército
     if (currentNation.ejercito) {
-        set('soldadosLevel', currentNation.ejercito.soldados);
-        set('tanquesLevel', currentNation.ejercito.tanques);
-        set('avionesLevel', currentNation.ejercito.aviones);
+        set('soldadosLevel', currentNation.ejercito.soldados || 0);
+        set('tanquesLevel', currentNation.ejercito.tanques || 0);
+        set('avionesLevel', currentNation.ejercito.aviones || 0);
     }
-    set('militaryPowerDisplay', currentNation.poder_total);
+    set('militaryPowerDisplay', currentNation.poder_total || 0);
 
     // Etiquetas de materiales
     document.querySelectorAll('.label-money').forEach(el => el.innerText = t.money);
@@ -407,7 +414,7 @@ function updateRankingDisplay() {
             <div class="ranking-item">
                 <span class="rank">#${i + 1}</span>
                 <span class="nation-name">${n.nombre}</span>
-                <span class="military-power-stat">⚔️ ${n.poder_total}</span>
+                <span class="military-power-stat">⚔️ ${n.poder_total || 0}</span>
                 ${n.id !== currentUser ? `<button onclick="attackNation('${n.id}')" class="btn-attack">${t.attack}</button>` : '⭐'}
             </div>`;
     });
