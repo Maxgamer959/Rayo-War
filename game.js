@@ -2,8 +2,8 @@
 // RAYO WAR - PASSIVE WARFARE SYSTEM
 // ======================
 
-let currentNacion = null; // Variable declarada globalmente para evitar ReferenceError
-let map = null; // Variable para la instancia del mapa Leaflet
+let currentNacion = null; 
+let map = null; 
 
 import { auth, db } from "./firebase-config.js";
 import {
@@ -114,15 +114,12 @@ function switchAuthTab(tab) {
 
 async function handleLogin(e) {
     if (e) e.preventDefault();
-    
     const email = document.getElementById('loginEmail').value;
     const password = document.getElementById('loginPassword').value;
-
     if (!email || !password) {
         showAuthMessage('Por favor completa todos los campos', 'error');
         return;
     }
-
     const result = await loginUser(email, password);
     if (result.success) {
         currentUser = result.uid;
@@ -135,23 +132,19 @@ async function handleLogin(e) {
 
 async function handleRegister(e) {
     if (e) e.preventDefault();
-    
     const email = document.getElementById('registerEmail').value;
     const password = document.getElementById('registerPassword').value;
     const nationName = document.getElementById('nationName').value;
     const government = document.getElementById('governmentSelect').value;
     const territory = document.getElementById('territorySelect').value;
-
     if (!email || !password || !nationName || !government || !territory) {
         showAuthMessage('Por favor completa todos los campos', 'error');
         return;
     }
-
     if (password.length < 6) {
         showAuthMessage('La contraseña debe tener al menos 6 caracteres', 'error');
         return;
     }
-
     const result = await registerUser(email, password, nationName, government, territory);
     if (result.success) {
         currentUser = result.uid;
@@ -205,21 +198,19 @@ async function loadNationData() {
         if (!currentUser) return;
         const nacionRef = doc(db, "naciones", currentUser);
         const nacionSnap = await getDoc(nacionRef);
-
         if (nacionSnap.exists()) {
             currentNation = nacionSnap.data();
             currentNacion = currentNation;
             currentNation.id = currentUser;
-            
             if (!currentNation.ejercito) {
                 currentNation.ejercito = { soldados: 0, tanques: 0, aviones: 0 };
             }
-
             calculatePassiveProduction();
             await processPendingAttacks();
             await loadAllNations();
             updateUI();
-            initMap(); // Inicializar el mapa después de cargar los datos
+            // Retrasar un poco la inicialización del mapa para asegurar que el DOM esté listo
+            setTimeout(initMap, 500);
         } else {
             console.error("❌ Nación no encontrada");
         }
@@ -234,8 +225,12 @@ async function loadNationData() {
 
 function initMap() {
     if (!currentNation) return;
+    const mapDiv = document.getElementById('map');
+    if (!mapDiv) {
+        console.error("❌ Contenedor de mapa no encontrado");
+        return;
+    }
 
-    // Coordenadas aproximadas por territorio
     const coords = {
         'Chile': [-35.6751, -71.543],
         'Argentina': [-38.4161, -63.6167],
@@ -259,28 +254,34 @@ function initMap() {
         'Arabia Saudita': [23.8853, 45.0792]
     };
 
-    const center = coords[currentNation.territorio] || [0, 0];
+    const center = coords[currentNation.territorio] || [20, 0];
 
-    // Si el mapa ya existe, solo mover la vista
     if (map) {
         map.setView(center, 4);
+        map.invalidateSize();
         return;
     }
 
-    // Crear el mapa
-    map = L.map('map').setView(center, 4);
+    try {
+        map = L.map('map', {
+            zoomControl: true,
+            scrollWheelZoom: true
+        }).setView(center, 4);
 
-    // Añadir capa de OpenStreetMap (Estilo Oscuro/CartoDB)
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-        subdomains: 'abcd',
-        maxZoom: 20
-    }).addTo(map);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+            subdomains: 'abcd',
+            maxZoom: 19
+        }).addTo(map);
 
-    // Añadir marcador en la capital/centro
-    L.marker(center).addTo(map)
-        .bindPopup(`<b>${currentNation.nombre}</b><br>${currentNation.territorio}`)
-        .openPopup();
+        L.marker(center).addTo(map)
+            .bindPopup(`<b>${currentNation.nombre}</b><br>${currentNation.territorio}`)
+            .openPopup();
+            
+        console.log("✅ Mapa inicializado correctamente");
+    } catch (e) {
+        console.error("❌ Error inicializando Leaflet:", e);
+    }
 }
 
 // ======================
@@ -295,26 +296,15 @@ async function processPendingAttacks() {
             where("id_defensor", "==", currentUser),
             where("procesado", "==", false)
         );
-
         const querySnapshot = await getDocs(q);
         pendingAttacks = [];
-
         for (const docSnap of querySnapshot.docs) {
             const attack = docSnap.data();
             attack.docId = docSnap.id;
-
-            const attackPower = (attack.tropas_enviadas.soldados * 10) + 
-                               (attack.tropas_enviadas.tanques * 100) + 
-                               (attack.tropas_enviadas.aviones * 500);
-
-            const defensePower = (currentNation.ejercito.soldados * 10) + 
-                                (currentNation.ejercito.tanques * 100) + 
-                                (currentNation.ejercito.aviones * 500);
-
+            const attackPower = (attack.tropas_enviadas.soldados * 10) + (attack.tropas_enviadas.tanques * 100) + (attack.tropas_enviadas.aviones * 500);
+            const defensePower = (currentNation.ejercito.soldados * 10) + (currentNation.ejercito.tanques * 100) + (currentNation.ejercito.aviones * 500);
             const randomFactor = Math.random() * 0.2 + 0.9;
-            const adjustedAttackPower = attackPower * randomFactor;
-            const isVictory = adjustedAttackPower > defensePower;
-
+            const isVictory = (attackPower * randomFactor) > defensePower;
             if (isVictory) {
                 const loot = Math.floor(currentNation.dinero * 0.1);
                 currentNation.dinero = Math.max(0, currentNation.dinero - loot);
@@ -326,20 +316,15 @@ async function processPendingAttacks() {
                 attack.resultado = 'victoria';
                 attack.botin = 0;
             }
-
             pendingAttacks.push(attack);
-            const attackRef = doc(db, "ataques", attack.docId);
-            await updateDoc(attackRef, { procesado: true });
+            await updateDoc(doc(db, "ataques", attack.docId), { procesado: true });
         }
-
         if (pendingAttacks.length > 0) {
-            const nacionRef = doc(db, "naciones", currentUser);
-            await updateDoc(nacionRef, {
+            await updateDoc(doc(db, "naciones", currentUser), {
                 dinero: currentNation.dinero,
                 seguridad: currentNation.seguridad,
                 ultima_conexion: new Date()
             });
-            console.log(`⚔️ ${pendingAttacks.length} ataques procesados`);
         }
     } catch (error) {
         console.error("❌ Error procesando ataques:", error.message);
@@ -352,21 +337,14 @@ async function processPendingAttacks() {
 
 async function loadAllNations() {
     try {
-        const q = query(
-            collection(db, "naciones"),
-            orderBy("dinero", "desc"),
-            limit(50)
-        );
+        const q = query(collection(db, "naciones"), orderBy("dinero", "desc"), limit(50));
         const querySnapshot = await getDocs(q);
         allNations = [];
-
         querySnapshot.forEach((doc) => {
             const nation = doc.data();
             nation.id = doc.id;
             allNations.push(nation);
         });
-
-        console.log("✅ Ranking cargado:", allNations.length, "naciones");
     } catch (error) {
         console.error("❌ Error cargando ranking:", error.message);
     }
@@ -378,57 +356,31 @@ async function loadAllNations() {
 
 function calculatePassiveProduction() {
     if (!currentNation) return;
-
-    const lastConnection = currentNation.ultima_conexion.toDate ? 
-        currentNation.ultima_conexion.toDate() : 
-        new Date(currentNation.ultima_conexion);
-    
-    const now = new Date();
-    const minutesOffline = (now - lastConnection) / (1000 * 60);
-
-    const moneyPerMinute = currentNation.poblacion * 0.5;
-    const foodPerMinute = currentNation.edificios.farms * 8;
-
-    currentNation.dinero += moneyPerMinute * minutesOffline;
+    const lastConnection = currentNation.ultima_conexion.toDate ? currentNation.ultima_conexion.toDate() : new Date(currentNation.ultima_conexion);
+    const minutesOffline = (new Date() - lastConnection) / (1000 * 60);
+    currentNation.dinero += (currentNation.poblacion * 0.5) * minutesOffline;
     currentNation.poblacion += Math.floor(currentNation.poblacion * (minutesOffline / 1000));
-
-    currentNation.salud = Math.max(0, currentNation.salud - (minutesOffline * 0.1));
-    currentNation.seguridad = Math.max(0, currentNation.seguridad - (minutesOffline * 0.1));
-
-    currentNation.salud += currentNation.edificios.hospitals * 0.5;
-    currentNation.seguridad += (currentNation.edificios.police + currentNation.edificios.firefighters) * 0.3;
+    currentNation.salud = Math.max(0, currentNation.salud - (minutesOffline * 0.1)) + (currentNation.edificios.hospitals * 0.5);
+    currentNation.seguridad = Math.max(0, currentNation.seguridad - (minutesOffline * 0.1)) + (currentNation.edificios.police + currentNation.edificios.firefighters) * 0.3;
 }
 
 // ======================
-// RECLUTAMIENTO MILITAR
+// ACCIONES DEL JUEGO
 // ======================
 
 async function recruitUnit(unitType) {
     const costs = { soldados: 50, tanques: 500, aviones: 2000 };
-    const cost = costs[unitType];
-
-    if (currentNation.dinero < cost) {
-        alert('❌ ' + t('dineroInsuficiente'));
-        return;
-    }
-
+    if (currentNation.dinero < costs[unitType]) { alert('❌ ' + t('dineroInsuficiente')); return; }
     try {
-        const batch = writeBatch(db);
-        const nacionRef = doc(db, "naciones", currentUser);
-
-        batch.update(nacionRef, {
-            dinero: currentNation.dinero - cost,
+        await updateDoc(doc(db, "naciones", currentUser), {
+            dinero: currentNation.dinero - costs[unitType],
             [`ejercito.${unitType}`]: currentNation.ejercito[unitType] + 1,
             ultima_conexion: new Date()
         });
-
-        await batch.commit();
-        currentNation.dinero -= cost;
+        currentNation.dinero -= costs[unitType];
         currentNation.ejercito[unitType]++;
         updateUI();
-    } catch (error) {
-        console.error("❌ Error reclutando:", error.message);
-    }
+    } catch (e) { console.error(e); }
 }
 
 function calculateMilitaryPower(nation) {
@@ -437,194 +389,118 @@ function calculateMilitaryPower(nation) {
 }
 
 async function attackNation(targetId) {
-    if (!currentNation.ejercito || (currentNation.ejercito.soldados + currentNation.ejercito.tanques + currentNation.ejercito.aviones) === 0) {
-        alert('❌ ' + t('noUnidades'));
-        return;
-    }
-
-    const targetNation = allNations.find(n => n.id === targetId);
-    if (!targetNation || targetId === currentUser) return;
-
+    if (calculateMilitaryPower(currentNation) === 0) { alert('❌ ' + t('noUnidades')); return; }
+    const target = allNations.find(n => n.id === targetId);
+    if (!target || targetId === currentUser) return;
     try {
-        const batch = writeBatch(db);
-        const nacionRef = doc(db, "naciones", currentUser);
-        batch.update(nacionRef, { ejercito: currentNation.ejercito, ultima_conexion: new Date() });
-        await batch.commit();
-
-        const attackData = {
-            id_atacante: currentUser,
-            id_defensor: targetId,
-            nombre_atacante: currentNation.nombre,
-            nombre_defensor: targetNation.nombre,
-            tropas_enviadas: {
-                soldados: currentNation.ejercito.soldados,
-                tanques: currentNation.ejercito.tanques,
-                aviones: currentNation.ejercito.aviones
-            },
-            fecha_ataque: new Date(),
-            procesado: false
-        };
-
-        await addDoc(collection(db, "ataques"), attackData);
-        alert(`✅ ${t('ataqueLanzado')} contra ${targetNation.nombre}`);
+        await addDoc(collection(db, "ataques"), {
+            id_atacante: currentUser, id_defensor: targetId,
+            nombre_atacante: currentNation.nombre, nombre_defensor: target.nombre,
+            tropas_enviadas: currentNation.ejercito, fecha_ataque: new Date(), procesado: false
+        });
+        alert(`✅ ${t('ataqueLanzado')} contra ${target.nombre}`);
         await loadNationData();
-    } catch (error) {
-        console.error("❌ Error lanzando ataque:", error.message);
-    }
+    } catch (e) { console.error(e); }
 }
 
-async function upgradeBuilding(buildingType) {
+async function upgradeBuilding(type) {
     const costs = { factories: 500, powerPlants: 600, farms: 400, mines: 700, refineries: 800 };
-    const cost = costs[buildingType];
-    if (currentNation.dinero < cost) return;
-
+    if (currentNation.dinero < costs[type]) return;
     try {
-        const batch = writeBatch(db);
-        const nacionRef = doc(db, "naciones", currentUser);
-        batch.update(nacionRef, {
-            dinero: currentNation.dinero - cost,
-            [`edificios.${buildingType}`]: currentNation.edificios[buildingType] + 1,
+        await updateDoc(doc(db, "naciones", currentUser), {
+            dinero: currentNation.dinero - costs[type],
+            [`edificios.${type}`]: currentNation.edificios[type] + 1,
             ultima_conexion: new Date()
         });
-        await batch.commit();
-        currentNation.dinero -= cost;
-        currentNation.edificios[buildingType]++;
+        currentNation.dinero -= costs[type];
+        currentNation.edificios[type]++;
         updateUI();
-    } catch (error) {
-        console.error("❌ Error mejorando edificio:", error.message);
-    }
+    } catch (e) { console.error(e); }
 }
 
-async function upgradeService(serviceType) {
+async function upgradeService(type) {
     const costs = { hospitals: 800, police: 600, firefighters: 700, schools: 500 };
-    const cost = costs[serviceType];
-    if (currentNation.dinero < cost) return;
-
+    if (currentNation.dinero < costs[type]) return;
     try {
-        const batch = writeBatch(db);
-        const nacionRef = doc(db, "naciones", currentUser);
-        let updates = {
-            dinero: currentNation.dinero - cost,
-            [`edificios.${serviceType}`]: currentNation.edificios[serviceType] + 1,
+        await updateDoc(doc(db, "naciones", currentUser), {
+            dinero: currentNation.dinero - costs[type],
+            [`edificios.${type}`]: currentNation.edificios[type] + 1,
             ultima_conexion: new Date()
-        };
-        batch.update(nacionRef, updates);
-        await batch.commit();
-        currentNation.dinero -= cost;
-        currentNation.edificios[serviceType]++;
+        });
+        currentNation.dinero -= costs[type];
+        currentNation.edificios[type]++;
         updateUI();
-    } catch (error) {
-        console.error("❌ Error construyendo servicio:", error.message);
-    }
+    } catch (e) { console.error(e); }
 }
 
 async function buildCity() {
-    const cityName = prompt('Nombre de la ciudad:');
-    if (!cityName) return;
-    const cost = 1000;
-    if (currentNation.dinero < cost) return;
-
+    const name = prompt('Nombre de la ciudad:');
+    if (!name || currentNation.dinero < 1000) return;
     try {
-        const batch = writeBatch(db);
-        const nacionRef = doc(db, "naciones", currentUser);
-        const newCity = { name: cityName, population: 100, buildings: { factories: 0, mines: 0, farms: 0 } };
-        batch.update(nacionRef, {
-            dinero: currentNation.dinero - cost,
+        const newCity = { name, population: 100, buildings: { factories: 0, mines: 0, farms: 0 } };
+        await updateDoc(doc(db, "naciones", currentUser), {
+            dinero: currentNation.dinero - 1000,
             ciudades: [...currentNation.ciudades, newCity],
             ultima_conexion: new Date()
         });
-        await batch.commit();
-        currentNation.dinero -= cost;
+        currentNation.dinero -= 1000;
         currentNation.ciudades.push(newCity);
         updateUI();
-    } catch (error) {
-        console.error("❌ Error construyendo ciudad:", error.message);
-    }
+    } catch (e) { console.error(e); }
 }
 
 function changeLanguage(lang) {
     currentLanguage = lang;
-    document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.remove('active'));
-    const targetBtn = document.querySelector(`[data-lang="${lang}"]`);
-    if (targetBtn) targetBtn.classList.add('active');
+    document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.lang === lang));
     updateUI();
 }
 
 function switchTab(tabName) {
-    const tabs = document.querySelectorAll('.tab-content');
-    tabs.forEach(tab => tab.classList.remove('active'));
-    const selectedTab = document.getElementById(tabName);
-    if (selectedTab) selectedTab.classList.add('active');
-    const buttons = document.querySelectorAll('.nav-btn');
-    buttons.forEach(btn => btn.classList.remove('active'));
-    if (event && event.target) event.target.classList.add('active');
+    document.querySelectorAll('.tab-content').forEach(tab => tab.classList.toggle('active', tab.id === tabName));
+    document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.toggle('active', btn.getAttribute('onclick').includes(tabName)));
     if (tabName === 'war') updateRankingDisplay();
     if (tabName === 'overview' && map) setTimeout(() => map.invalidateSize(), 200);
 }
 
 function updateRankingDisplay() {
-    let rankingHTML = '<h3>Ranking de Naciones</h3><div class="ranking-list">';
-    allNations.forEach((nation, index) => {
-        const militaryPower = calculateMilitaryPower(nation);
-        const isYou = nation.id === currentUser ? ' (Tú)' : '';
-        const attackBtn = nation.id !== currentUser ? `<button onclick="attackNation('${nation.id}')" class="btn-attack">⚔️ Atacar</button>` : '';
-        rankingHTML += `
+    let html = '<h3>Ranking de Naciones</h3><div class="ranking-list">';
+    allNations.forEach((n, i) => {
+        html += `
             <div class="ranking-item">
                 <div class="ranking-info">
-                    <span class="rank">#${index + 1}</span>
-                    <span class="nation-name">${nation.nombre}${isYou}</span>
-                    <span class="nation-territory">${nation.territorio}</span>
-                    <span class="military-power-stat">⚔️ ${militaryPower}</span>
-                    <span class="nation-money">💰 $${Math.floor(nation.dinero)}</span>
+                    <span class="rank">#${i + 1}</span>
+                    <span class="nation-name">${n.nombre}${n.id === currentUser ? ' (Tú)' : ''}</span>
+                    <span class="military-power-stat">⚔️ ${calculateMilitaryPower(n)}</span>
+                    <span class="nation-money">💰 $${Math.floor(n.dinero)}</span>
                 </div>
-                ${attackBtn}
-            </div>
-        `;
+                ${n.id !== currentUser ? `<button onclick="attackNation('${n.id}')" class="btn-attack">⚔️ Atacar</button>` : ''}
+            </div>`;
     });
-    rankingHTML += '</div>';
-    const rankingList = document.getElementById('rankingList');
-    if (rankingList) rankingList.innerHTML = rankingHTML;
+    const el = document.getElementById('rankingList');
+    if (el) el.innerHTML = html + '</div>';
 }
 
 function updateUI() {
     if (!currentNation) return;
-    const sidebarMoney = document.getElementById('sidebarMoney');
-    const sidebarPopulation = document.getElementById('sidebarPopulation');
-    const sidebarNationName = document.getElementById('nationName');
-    if (sidebarMoney) sidebarMoney.innerText = '$' + Math.floor(currentNation.dinero);
-    if (sidebarPopulation) sidebarPopulation.innerText = Math.floor(currentNation.poblacion);
-    if (sidebarNationName) sidebarNationName.innerText = currentNation.nombre + ' (' + currentNation.territorio + ')';
-
-    const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.innerText = val; };
-    setVal('overviewNation', currentNation.nombre);
-    setVal('overviewTerritory', currentNation.territorio);
-    setVal('overviewGovernment', currentNation.gobierno);
-    setVal('overviewPopulation', Math.floor(currentNation.poblacion));
-    setVal('overviewMoney', '$' + Math.floor(currentNation.dinero));
-    setVal('overviewHappiness', Math.floor(currentNation.felicidad) + '%');
-    setVal('overviewHealth', Math.floor(currentNation.salud) + '%');
-    setVal('overviewSecurity', Math.floor(currentNation.seguridad) + '%');
-
-    const abundantResources = document.getElementById('abundantResources');
-    if (abundantResources) {
-        let html = '<h3>Recursos Abundantes:</h3>';
-        for (let r in currentNation.recursos) html += `<p>${r}: ${currentNation.recursos[r]}%</p>`;
-        abundantResources.innerHTML = html;
-    }
-
-    setVal('factoriesLevel', currentNation.edificios.factories);
-    setVal('powerLevel', currentNation.edificios.powerPlants);
-    setVal('farmsLevel', currentNation.edificios.farms);
-    setVal('minesLevel', currentNation.edificios.mines);
-    setVal('refineriesLevel', currentNation.edificios.refineries);
-    setVal('hospitalsLevel', currentNation.edificios.hospitals);
-    setVal('policeLevel', currentNation.edificios.police);
-    setVal('firefightersLevel', currentNation.edificios.firefighters);
-    setVal('schoolsLevel', currentNation.edificios.schools);
-    setVal('soldadosLevel', currentNation.ejercito.soldados);
-    setVal('tanquesLevel', currentNation.ejercito.tanques);
-    setVal('avionesLevel', currentNation.ejercito.aviones);
-    setVal('militaryPowerDisplay', calculateMilitaryPower(currentNation));
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.innerText = val; };
+    set('sidebarMoney', '$' + Math.floor(currentNation.dinero));
+    set('sidebarPopulation', Math.floor(currentNation.poblacion));
+    set('nationName', currentNation.nombre + ' (' + currentNation.territorio + ')');
+    set('overviewNation', currentNation.nombre);
+    set('overviewTerritory', currentNation.territorio);
+    set('overviewPopulation', Math.floor(currentNation.poblacion));
+    set('overviewMoney', '$' + Math.floor(currentNation.dinero));
+    set('overviewHappiness', Math.floor(currentNation.felicidad) + '%');
+    set('overviewHealth', Math.floor(currentNation.salud) + '%');
+    set('overviewSecurity', Math.floor(currentNation.seguridad) + '%');
+    
+    const buildings = ['factories', 'powerPlants', 'farms', 'mines', 'refineries', 'hospitals', 'police', 'firefighters', 'schools'];
+    buildings.forEach(b => set(b + 'Level', currentNation.edificios[b]));
+    
+    set('soldadosLevel', currentNation.ejercito.soldados);
+    set('tanquesLevel', currentNation.ejercito.tanques);
+    set('avionesLevel', currentNation.ejercito.aviones);
+    set('militaryPowerDisplay', calculateMilitaryPower(currentNation));
 }
 
 showAuthScreen();
