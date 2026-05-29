@@ -209,8 +209,8 @@ async function loadNationData() {
             await processPendingAttacks();
             await loadAllNations();
             updateUI();
-            // Retrasar un poco la inicialización del mapa para asegurar que el DOM esté listo
-            setTimeout(initMap, 500);
+            // Inicializar el mapa después de un breve retraso
+            setTimeout(initMap, 800);
         } else {
             console.error("❌ Nación no encontrada");
         }
@@ -227,7 +227,7 @@ function initMap() {
     if (!currentNation) return;
     const mapDiv = document.getElementById('map');
     if (!mapDiv) {
-        console.error("❌ Contenedor de mapa no encontrado");
+        console.error("❌ Contenedor de mapa no encontrado en el DOM");
         return;
     }
 
@@ -256,21 +256,21 @@ function initMap() {
 
     const center = coords[currentNation.territorio] || [20, 0];
 
+    // Si ya existe una instancia de mapa, eliminarla para recrearla (limpieza total)
     if (map) {
-        map.setView(center, 4);
-        map.invalidateSize();
-        return;
+        map.remove();
+        map = null;
     }
 
     try {
+        console.log("📍 Inicializando mapa en:", currentNation.territorio);
         map = L.map('map', {
             zoomControl: true,
             scrollWheelZoom: true
         }).setView(center, 4);
 
-        // Usar mapa estándar de OpenStreetMap para máxima compatibilidad y visibilidad
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            attribution: '&copy; OpenStreetMap contributors',
             maxZoom: 19
         }).addTo(map);
 
@@ -278,9 +278,11 @@ function initMap() {
             .bindPopup(`<b>${currentNation.nombre}</b><br>${currentNation.territorio}`)
             .openPopup();
             
-        console.log("✅ Mapa inicializado correctamente");
+        // Forzar actualización de tamaño
+        setTimeout(() => map.invalidateSize(), 200);
+        console.log("✅ Mapa Leaflet cargado correctamente");
     } catch (e) {
-        console.error("❌ Error inicializando Leaflet:", e);
+        console.error("❌ Error crítico en Leaflet:", e);
     }
 }
 
@@ -459,7 +461,12 @@ function switchTab(tabName) {
     document.querySelectorAll('.tab-content').forEach(tab => tab.classList.toggle('active', tab.id === tabName));
     document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.toggle('active', btn.getAttribute('onclick').includes(tabName)));
     if (tabName === 'war') updateRankingDisplay();
-    if (tabName === 'overview' && map) setTimeout(() => map.invalidateSize(), 200);
+    if (tabName === 'overview' && map) {
+        setTimeout(() => {
+            map.invalidateSize();
+            console.log("🔄 Redibujando mapa...");
+        }, 300);
+    }
 }
 
 function updateRankingDisplay() {
