@@ -23,10 +23,8 @@ import {
 // ======================
 // REGISTRO DE USUARIO
 // ======================
-
 async function registerUser(email, password, nationName, government, territory) {
     try {
-        console.log("🔄 Iniciando registro...");
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const uid = userCredential.user.uid;
 
@@ -81,10 +79,8 @@ async function registerUser(email, password, nationName, government, territory) 
         };
 
         await setDoc(doc(db, "naciones", uid), nationDocData);
-        console.log("✅ Registro completo para:", uid);
         return { success: true, uid: uid };
     } catch (error) {
-        console.error("❌ Error en registro:", error.message);
         return { success: false, error: error.message };
     }
 }
@@ -92,7 +88,6 @@ async function registerUser(email, password, nationName, government, territory) 
 // ======================
 // LOGIN DE USUARIO
 // ======================
-
 async function loginUser(email, password) {
     try {
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
@@ -109,7 +104,6 @@ async function loginUser(email, password) {
         await updateDoc(nacionRef, { ultima_conexion: new Date() });
         return { success: true, uid: uid };
     } catch (error) {
-        console.error("❌ Error en login:", error.message);
         return { success: false, error: error.message };
     }
 }
@@ -117,7 +111,6 @@ async function loginUser(email, password) {
 // ======================
 // LOGOUT DE USUARIO
 // ======================
-
 async function logoutUser() {
     try {
         await signOut(auth);
@@ -130,20 +123,18 @@ async function logoutUser() {
 // ======================
 // ACTUALIZAR ÚLTIMA CONEXIÓN
 // ======================
-
 async function updateLastConnection(uid) {
     try {
         const nacionRef = doc(db, "naciones", uid);
         await updateDoc(nacionRef, { ultima_conexion: new Date() });
     } catch (error) {
-        console.error("❌ Error actualizando última conexión:", error.message);
+        console.error("Error:", error.message);
     }
 }
 
 // ======================
 // OBTENER RECURSOS POR PAÍS
 // ======================
-
 function getCountryResources(territory) {
     const countryResources = {
         'Chile': { Cobre: 80, Hierro: 40, Carbón: 30, Petróleo: 20 },
@@ -171,28 +162,23 @@ function getCountryResources(territory) {
 // ======================
 // MONITOREAR ESTADO DE AUTENTICACIÓN
 // ======================
-
 let authListenerSet = false;
-
 function setupAuthListener(callback) {
     if (authListenerSet) return;
     authListenerSet = true;
 
     onAuthStateChanged(auth, (user) => {
         if (user) {
-            console.log("✅ Usuario autenticado:", user.uid);
             callback({ authenticated: true, uid: user.uid, email: user.email });
         } else {
-            console.log("❌ Usuario no autenticado");
             callback({ authenticated: false });
         }
     });
 }
 
 // ======================
-// EXPORTAR FUNCIONES
+// EXPORTACIÓN ÚNICA
 // ======================
-
 export {
     registerUser,
     loginUser,
