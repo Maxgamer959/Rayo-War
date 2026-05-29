@@ -26,11 +26,9 @@ import {
 
 async function registerUser(email, password, nationName, government, territory) {
     try {
-        console.log("🔄 Iniciando registro para:", email);
-        
+        console.log("🔄 Iniciando registro...");
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const uid = userCredential.user.uid;
-        console.log("✅ Usuario creado en Auth:", uid);
 
         const userDocData = {
             email: email,
@@ -47,7 +45,6 @@ async function registerUser(email, password, nationName, government, territory) 
         };
 
         await setDoc(doc(db, "usuarios", uid), userDocData);
-        console.log("✅ Documento de usuario creado en Firestore");
 
         const nationDocData = {
             id_lider: uid,
@@ -84,8 +81,7 @@ async function registerUser(email, password, nationName, government, territory) 
         };
 
         await setDoc(doc(db, "naciones", uid), nationDocData);
-        console.log("✅ Documento de nación creado en Firestore");
-
+        console.log("✅ Registro completo para:", uid);
         return { success: true, uid: uid };
     } catch (error) {
         console.error("❌ Error en registro:", error.message);
@@ -194,7 +190,7 @@ function setupAuthListener(callback) {
 }
 
 // ======================
-// EXPORTAR FUNCIONES (ÚNICA EXPORTACIÓN)
+// EXPORTAR FUNCIONES
 // ======================
 
 export {
@@ -205,3 +201,4 @@ export {
     getCountryResources,
     setupAuthListener
 };
+
