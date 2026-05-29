@@ -2,6 +2,8 @@
 // RAYO WAR - PASSIVE WARFARE SYSTEM
 // ======================
 
+let currentNacion = null; // Variable declarada globalmente para evitar ReferenceError
+
 import { auth, db } from "./firebase-config.js";
 import {
     registerUser,
@@ -164,24 +166,9 @@ async function handleLogout() {
     if (result.success) {
         currentUser = null;
         currentNation = null;
+        currentNacion = null;
         showAuthScreen();
     }
-}
-
-function switchToRegister(e) {
-    if (e) e.preventDefault();
-    const loginForm = document.getElementById('loginForm');
-    const registerForm = document.getElementById('registerForm');
-    if (loginForm) loginForm.classList.remove('active');
-    if (registerForm) registerForm.classList.add('active');
-}
-
-function switchToLogin(e) {
-    if (e) e.preventDefault();
-    const loginForm = document.getElementById('loginForm');
-    const registerForm = document.getElementById('registerForm');
-    if (registerForm) registerForm.classList.remove('active');
-    if (loginForm) loginForm.classList.add('active');
 }
 
 function showAuthMessage(message, type) {
@@ -220,6 +207,7 @@ async function loadNationData() {
 
         if (nacionSnap.exists()) {
             currentNation = nacionSnap.data();
+            currentNacion = currentNation; // Sincronizar ambas variables para compatibilidad
             currentNation.id = currentUser;
             
             // Inicializar unidades militares si no existen
@@ -847,8 +835,6 @@ window.handleLogin = handleLogin;
 window.handleRegister = handleRegister;
 window.handleLogout = handleLogout;
 window.switchAuthTab = switchAuthTab;
-window.switchToRegister = switchToRegister;
-window.switchToLogin = switchToLogin;
 window.upgradeService = upgradeService;
 window.upgradeBuilding = upgradeBuilding;
 window.buildCity = buildCity;
