@@ -84,7 +84,7 @@ const translations = {
         ciudadCreada: 'City created successfully',
         ataqueLanzado: 'Attack launched successfully',
         ataqueFallido: 'Attack failed',
-        victoria: 'Victory',
+        victoria: 'Victoria',
         derrota: 'Defeat',
         botin: 'Loot',
         ataquesPendientes: 'Pending Attacks',
@@ -101,9 +101,12 @@ function t(key) {
 // ======================
 
 function switchAuthTab(tab) {
-    document.getElementById('loginTab').classList.remove('active');
-    document.getElementById('registerTab').classList.remove('active');
-    document.getElementById(tab + 'Tab').classList.add('active');
+    const loginTab = document.getElementById('loginTab');
+    const registerTab = document.getElementById('registerTab');
+    if (loginTab) loginTab.classList.remove('active');
+    if (registerTab) registerTab.classList.remove('active');
+    const targetTab = document.getElementById(tab + 'Tab');
+    if (targetTab) targetTab.classList.add('active');
 }
 
 async function handleLogin(e) {
@@ -167,33 +170,41 @@ async function handleLogout() {
 
 function switchToRegister(e) {
     if (e) e.preventDefault();
-    document.getElementById('loginForm').classList.remove('active');
-    document.getElementById('registerForm').classList.add('active');
+    const loginForm = document.getElementById('loginForm');
+    const registerForm = document.getElementById('registerForm');
+    if (loginForm) loginForm.classList.remove('active');
+    if (registerForm) registerForm.classList.add('active');
 }
 
 function switchToLogin(e) {
     if (e) e.preventDefault();
-    document.getElementById('registerForm').classList.remove('active');
-    document.getElementById('loginForm').classList.add('active');
+    const loginForm = document.getElementById('loginForm');
+    const registerForm = document.getElementById('registerForm');
+    if (registerForm) registerForm.classList.remove('active');
+    if (loginForm) loginForm.classList.add('active');
 }
-
-window.switchToRegister = switchToRegister;
-window.switchToLogin = switchToLogin;
 
 function showAuthMessage(message, type) {
     const messageEl = document.getElementById('authMessage');
-    messageEl.textContent = message;
-    messageEl.className = 'auth-message ' + type;
+    if (messageEl) {
+        messageEl.textContent = message;
+        messageEl.className = 'auth-message ' + type;
+        messageEl.style.display = 'block';
+    }
 }
 
 function showAuthScreen() {
-    document.getElementById('authScreen').style.display = 'flex';
-    document.getElementById('gameScreen').style.display = 'none';
+    const authScreen = document.getElementById('authScreen');
+    const gameScreen = document.getElementById('gameScreen');
+    if (authScreen) authScreen.style.display = 'flex';
+    if (gameScreen) gameScreen.style.display = 'none';
 }
 
 function showGameScreen() {
-    document.getElementById('authScreen').style.display = 'none';
-    document.getElementById('gameScreen').style.display = 'flex';
+    const authScreen = document.getElementById('authScreen');
+    const gameScreen = document.getElementById('gameScreen');
+    if (authScreen) authScreen.style.display = 'none';
+    if (gameScreen) gameScreen.style.display = 'flex';
     updateUI();
 }
 
@@ -203,6 +214,7 @@ function showGameScreen() {
 
 async function loadNationData() {
     try {
+        if (!currentUser) return;
         const nacionRef = doc(db, "naciones", currentUser);
         const nacionSnap = await getDoc(nacionRef);
 
@@ -240,6 +252,7 @@ async function loadNationData() {
 
 async function processPendingAttacks() {
     try {
+        if (!currentUser || !currentNation) return;
         // Buscar ataques pendientes contra esta nación
         const q = query(
             collection(db, "ataques"),
@@ -401,7 +414,7 @@ async function recruitUnit(unitType) {
 // ======================
 
 function calculateMilitaryPower(nation) {
-    if (!nation.ejercito) return 0;
+    if (!nation || !nation.ejercito) return 0;
     return (nation.ejercito.soldados * 10) + (nation.ejercito.tanques * 100) + (nation.ejercito.aviones * 500);
 }
 
@@ -610,7 +623,8 @@ function changeLanguage(lang) {
     document.querySelectorAll('.lang-btn').forEach(btn => {
         btn.classList.remove('active');
     });
-    document.querySelector(`[data-lang="${lang}"]`).classList.add('active');
+    const targetBtn = document.querySelector(`[data-lang="${lang}"]`);
+    if (targetBtn) targetBtn.classList.add('active');
     updateUI();
 }
 
@@ -629,7 +643,11 @@ function switchTab(tabName) {
 
     const buttons = document.querySelectorAll('.nav-btn');
     buttons.forEach(btn => btn.classList.remove('active'));
-    event.target.classList.add('active');
+    
+    // Buscar el botón que disparó el evento
+    if (event && event.target) {
+        event.target.classList.add('active');
+    }
 
     if (tabName === 'war') {
         updateRankingDisplay();
@@ -663,7 +681,8 @@ function updateRankingDisplay() {
     });
 
     rankingHTML += '</div>';
-    document.getElementById('rankingList').innerHTML = rankingHTML;
+    const rankingList = document.getElementById('rankingList');
+    if (rankingList) rankingList.innerHTML = rankingHTML;
 
     // Mostrar ataques pendientes procesados
     if (pendingAttacks.length > 0) {
@@ -683,7 +702,8 @@ function updateRankingDisplay() {
         });
 
         attacksHTML += '</div>';
-        document.getElementById('attacksLog').innerHTML = attacksHTML;
+        const attacksLog = document.getElementById('attacksLog');
+        if (attacksLog) attacksLog.innerHTML = attacksHTML;
     }
 }
 
@@ -698,7 +718,6 @@ function updateUI() {
     const worldMap = document.getElementById('worldMap');
     if (worldMap) {
         const territory = currentNation.territorio;
-        // Simulación de mapa usando una imagen de placeholder con el nombre del territorio
         worldMap.style.backgroundImage = `url('https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?auto=format&fit=crop&q=80&w=1000')`; 
         worldMap.innerHTML = `
             <div class="map-overlay">📍 Territorio: ${territory}</div>
@@ -709,66 +728,94 @@ function updateUI() {
     }
 
     // SIDEBAR
-    document.getElementById('sidebarMoney').innerText = '$' + Math.floor(currentNation.dinero);
-    document.getElementById('sidebarPopulation').innerText = Math.floor(currentNation.poblacion);
-    document.getElementById('nationName').innerText = currentNation.nombre + ' (' + currentNation.territorio + ')';
+    const sidebarMoney = document.getElementById('sidebarMoney');
+    const sidebarPopulation = document.getElementById('sidebarPopulation');
+    const sidebarNationName = document.getElementById('nationName');
+    
+    if (sidebarMoney) sidebarMoney.innerText = '$' + Math.floor(currentNation.dinero);
+    if (sidebarPopulation) sidebarPopulation.innerText = Math.floor(currentNation.poblacion);
+    if (sidebarNationName) sidebarNationName.innerText = currentNation.nombre + ' (' + currentNation.territorio + ')';
 
     // OVERVIEW
-    document.getElementById('overviewNation').innerText = currentNation.nombre;
-    document.getElementById('overviewTerritory').innerText = currentNation.territorio;
-    document.getElementById('overviewGovernment').innerText = currentNation.gobierno;
-    document.getElementById('overviewPopulation').innerText = Math.floor(currentNation.poblacion);
-    document.getElementById('overviewMoney').innerText = '$' + Math.floor(currentNation.dinero);
-    document.getElementById('overviewHappiness').innerText = Math.floor(currentNation.felicidad) + '%';
-    document.getElementById('overviewHealth').innerText = Math.floor(currentNation.salud) + '%';
-    document.getElementById('overviewSecurity').innerText = Math.floor(currentNation.seguridad) + '%';
+    const overviewNation = document.getElementById('overviewNation');
+    const overviewTerritory = document.getElementById('overviewTerritory');
+    const overviewGovernment = document.getElementById('overviewGovernment');
+    const overviewPopulation = document.getElementById('overviewPopulation');
+    const overviewMoney = document.getElementById('overviewMoney');
+    const overviewHappiness = document.getElementById('overviewHappiness');
+    const overviewHealth = document.getElementById('overviewHealth');
+    const overviewSecurity = document.getElementById('overviewSecurity');
+
+    if (overviewNation) overviewNation.innerText = currentNation.nombre;
+    if (overviewTerritory) overviewTerritory.innerText = currentNation.territorio;
+    if (overviewGovernment) overviewGovernment.innerText = currentNation.gobierno;
+    if (overviewPopulation) overviewPopulation.innerText = Math.floor(currentNation.poblacion);
+    if (overviewMoney) overviewMoney.innerText = '$' + Math.floor(currentNation.dinero);
+    if (overviewHappiness) overviewHappiness.innerText = Math.floor(currentNation.felicidad) + '%';
+    if (overviewHealth) overviewHealth.innerText = Math.floor(currentNation.salud) + '%';
+    if (overviewSecurity) overviewSecurity.innerText = Math.floor(currentNation.seguridad) + '%';
 
     // RECURSOS
-    let resourcesHTML = '<h3>Recursos Abundantes:</h3>';
-    for (let resource in currentNation.recursos) {
-        resourcesHTML += '<p>' + resource + ': ' + currentNation.recursos[resource] + '%</p>';
+    const abundantResources = document.getElementById('abundantResources');
+    if (abundantResources) {
+        let resourcesHTML = '<h3>Recursos Abundantes:</h3>';
+        for (let resource in currentNation.recursos) {
+            resourcesHTML += '<p>' + resource + ': ' + currentNation.recursos[resource] + '%</p>';
+        }
+        abundantResources.innerHTML = resourcesHTML;
     }
-    document.getElementById('abundantResources').innerHTML = resourcesHTML;
 
     // INFRAESTRUCTURA
-    document.getElementById('factoriesLevel').innerText = currentNation.edificios.factories;
-    document.getElementById('factoriesProduction').innerText = '+' + Math.floor(currentNation.edificios.factories * 5);
+    const setLevel = (id, level) => {
+        const el = document.getElementById(id);
+        if (el) el.innerText = level;
+    };
+    const setProduction = (id, prod) => {
+        const el = document.getElementById(id);
+        if (el) el.innerText = '+' + Math.floor(prod);
+    };
 
-    document.getElementById('powerLevel').innerText = currentNation.edificios.powerPlants;
-    document.getElementById('powerProduction').innerText = '+' + Math.floor(currentNation.edificios.powerPlants * 10);
+    setLevel('factoriesLevel', currentNation.edificios.factories);
+    setProduction('factoriesProduction', currentNation.edificios.factories * 5);
 
-    document.getElementById('farmsLevel').innerText = currentNation.edificios.farms;
-    document.getElementById('farmsProduction').innerText = '+' + Math.floor(currentNation.edificios.farms * 8);
+    setLevel('powerLevel', currentNation.edificios.powerPlants);
+    setProduction('powerProduction', currentNation.edificios.powerPlants * 10);
 
-    document.getElementById('minesLevel').innerText = currentNation.edificios.mines;
-    document.getElementById('minesProduction').innerText = '+' + Math.floor(currentNation.edificios.mines * 5);
+    setLevel('farmsLevel', currentNation.edificios.farms);
+    setProduction('farmsProduction', currentNation.edificios.farms * 8);
 
-    document.getElementById('refineriesLevel').innerText = currentNation.edificios.refineries;
-    document.getElementById('refineriesProduction').innerText = '+' + Math.floor(currentNation.edificios.refineries * 5);
+    setLevel('minesLevel', currentNation.edificios.mines);
+    setProduction('minesProduction', currentNation.edificios.mines * 5);
+
+    setLevel('refineriesLevel', currentNation.edificios.refineries);
+    setProduction('refineriesProduction', currentNation.edificios.refineries * 5);
 
     // SERVICIOS
-    document.getElementById('hospitalsLevel').innerText = currentNation.edificios.hospitals;
-    document.getElementById('policeLevel').innerText = currentNation.edificios.police;
-    document.getElementById('firefightersLevel').innerText = currentNation.edificios.firefighters;
-    document.getElementById('schoolsLevel').innerText = currentNation.edificios.schools;
+    setLevel('hospitalsLevel', currentNation.edificios.hospitals);
+    setLevel('policeLevel', currentNation.edificios.police);
+    setLevel('firefightersLevel', currentNation.edificios.firefighters);
+    setLevel('schoolsLevel', currentNation.edificios.schools);
 
     // EJÉRCITO
     const militaryPower = calculateMilitaryPower(currentNation);
-    document.getElementById('soldadosLevel').innerText = currentNation.ejercito.soldados;
-    document.getElementById('tanquesLevel').innerText = currentNation.ejercito.tanques;
-    document.getElementById('avionesLevel').innerText = currentNation.ejercito.aviones;
-    document.getElementById('militaryPowerDisplay').innerText = militaryPower;
+    setLevel('soldadosLevel', currentNation.ejercito.soldados);
+    setLevel('tanquesLevel', currentNation.ejercito.tanques);
+    setLevel('avionesLevel', currentNation.ejercito.aviones);
+    setLevel('militaryPowerDisplay', militaryPower);
 
     // CIUDADES
-    let citiesHTML = '<h3>Ciudades:</h3>';
-    if (currentNation.ciudades.length === 0) {
-        citiesHTML += '<p>-</p>';
-    } else {
-        currentNation.ciudades.forEach(city => {
-            citiesHTML += '<p>🏙️ ' + city.name + ' (Pop: ' + city.population + ')</p>';
-        });
+    const citiesList = document.getElementById('citiesList');
+    if (citiesList) {
+        let citiesHTML = '<h3>Ciudades:</h3>';
+        if (!currentNation.ciudades || currentNation.ciudades.length === 0) {
+            citiesHTML += '<p>-</p>';
+        } else {
+            currentNation.ciudades.forEach(city => {
+                citiesHTML += '<p>🏙️ ' + city.name + ' (Pop: ' + city.population + ')</p>';
+            });
+        }
+        citiesList.innerHTML = citiesHTML;
     }
-    document.getElementById('citiesList').innerHTML = citiesHTML;
 }
 
 // ======================
@@ -795,8 +842,6 @@ setupAuthListener((authState) => {
 // ======================
 // EXPORTAR FUNCIONES AL OBJETO GLOBAL (window)
 // ======================
-// Esto permite que el HTML pueda llamar a estas funciones
-// cuando usa type="module" en los scripts
 
 window.handleLogin = handleLogin;
 window.handleRegister = handleRegister;
@@ -816,4 +861,3 @@ window.updateUI = updateUI;
 window.loadNationData = loadNationData;
 window.showAuthScreen = showAuthScreen;
 window.showGameScreen = showGameScreen;
-
