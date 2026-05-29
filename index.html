@@ -10,6 +10,23 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <style>
+        /* Estilos de emergencia para asegurar que el mapa se vea */
+        #map {
+            width: 100% !important;
+            height: 450px !important;
+            background: #eee !important;
+            border: 5px solid #00d4ff !important;
+            border-radius: 16px !important;
+            z-index: 1000 !important;
+            display: block !important;
+            margin-bottom: 20px !important;
+        }
+        .leaflet-container {
+            height: 100% !important;
+            width: 100% !important;
+        }
+    </style>
 </head>
 <body>
     <!-- PANTALLA DE AUTENTICACIÓN -->
@@ -149,10 +166,8 @@
                 <section id="overview" class="tab-content active">
                     <h2>📊 Resumen de tu Nación</h2>
                     
-                    <!-- CONTENEDOR DEL MAPA -->
-                    <div id="mapContainer" class="map-container">
-                        <div id="map" style="width: 100%; height: 100%; border-radius: 12px;"></div>
-                    </div>
+                    <!-- CONTENEDOR DEL MAPA (FORZADO) -->
+                    <div id="map"></div>
 
                     <div class="info-grid">
                         <div class="info-card">
@@ -184,28 +199,24 @@
                             <p class="building-production">Producción: <strong id="factoriesProduction">+0</strong> dinero/min</p>
                             <button onclick="upgradeBuilding('factories')">Mejorar (+$500)</button>
                         </div>
-
                         <div class="building-card">
                             <h3>⚡ Plantas de Energía</h3>
                             <p class="building-level">Nivel: <strong id="powerLevel">0</strong></p>
                             <p class="building-production">Producción: <strong id="powerProduction">+0</strong> energía/min</p>
                             <button onclick="upgradeBuilding('powerPlants')">Mejorar (+$600)</button>
                         </div>
-
                         <div class="building-card">
                             <h3>🌾 Granjas</h3>
                             <p class="building-level">Nivel: <strong id="farmsLevel">0</strong></p>
                             <p class="building-production">Producción: <strong id="farmsProduction">+0</strong> alimentos/min</p>
                             <button onclick="upgradeBuilding('farms')">Mejorar (+$400)</button>
                         </div>
-
                         <div class="building-card">
                             <h3>⛏️ Minas</h3>
                             <p class="building-level">Nivel: <strong id="minesLevel">0</strong></p>
                             <p class="building-production">Producción: <strong id="minesProduction">+0</strong> minerales/min</p>
                             <button onclick="upgradeBuilding('mines')">Mejorar (+$700)</button>
                         </div>
-
                         <div class="building-card">
                             <h3>🛢️ Refinerías</h3>
                             <p class="building-level">Nivel: <strong id="refineriesLevel">0</strong></p>
@@ -222,28 +233,21 @@
                         <div class="service-card">
                             <h3>🏥 Hospitales</h3>
                             <p class="service-level">Nivel: <strong id="hospitalsLevel">0</strong></p>
-                            <p class="service-effect">Efecto: +Salud</p>
                             <button onclick="upgradeService('hospitals')">Construir (+$800)</button>
                         </div>
-
                         <div class="service-card">
                             <h3>👮 Policía</h3>
                             <p class="service-level">Nivel: <strong id="policeLevel">0</strong></p>
-                            <p class="service-effect">Efecto: +Seguridad</p>
                             <button onclick="upgradeService('police')">Construir (+$600)</button>
                         </div>
-
                         <div class="service-card">
                             <h3>🚒 Bomberos</h3>
                             <p class="service-level">Nivel: <strong id="firefightersLevel">0</strong></p>
-                            <p class="service-effect">Efecto: +Seguridad</p>
                             <button onclick="upgradeService('firefighters')">Construir (+$700)</button>
                         </div>
-
                         <div class="service-card">
                             <h3>🎓 Escuelas</h3>
                             <p class="service-level">Nivel: <strong id="schoolsLevel">0</strong></p>
-                            <p class="service-effect">Efecto: +Felicidad</p>
                             <button onclick="upgradeService('schools')">Construir (+$500)</button>
                         </div>
                     </div>
@@ -252,7 +256,7 @@
                 <!-- TAB: CITIES -->
                 <section id="cities" class="tab-content">
                     <h2>🏙️ Ciudades</h2>
-                    <button onclick="buildCity()" class="primary-btn">+ Construir Nueva Ciudad ($1000)</button>
+                    <button onclick="buildCity()" class="btn-primary">+ Construir Nueva Ciudad ($1000)</button>
                     <div id="citiesList" class="cities-list">-</div>
                 </section>
 
@@ -264,30 +268,34 @@
                             <h3>🎖️ Ejército Nacional</h3>
                             <div class="military-grid">
                                 <div class="military-card">
-                                    <h4>👨‍🎖️ Soldados</h4>
-                                    <p class="unit-count">Cantidad: <strong id="soldadosLevel">0</strong></p>
-                                    <button onclick="recruitUnit('soldados')" class="btn-recruit">Reclutar (+$50)</button>
+                                    <h4>🪖 Soldados</h4>
+                                    <p>Cantidad: <strong id="soldadosLevel">0</strong></p>
+                                    <button onclick="recruitUnit('soldados')">Reclutar ($50)</button>
                                 </div>
                                 <div class="military-card">
                                     <h4>🚜 Tanques</h4>
-                                    <p class="unit-count">Cantidad: <strong id="tanquesLevel">0</strong></p>
-                                    <button onclick="recruitUnit('tanques')" class="btn-recruit">Reclutar (+$500)</button>
+                                    <p>Cantidad: <strong id="tanquesLevel">0</strong></p>
+                                    <button onclick="recruitUnit('tanques')">Reclutar ($500)</button>
                                 </div>
                                 <div class="military-card">
                                     <h4>✈️ Aviones</h4>
-                                    <p class="unit-count">Cantidad: <strong id="avionesLevel">0</strong></p>
-                                    <button onclick="recruitUnit('aviones')" class="btn-recruit">Reclutar (+$2000)</button>
+                                    <p>Cantidad: <strong id="avionesLevel">0</strong></p>
+                                    <button onclick="recruitUnit('aviones')">Reclutar ($2000)</button>
                                 </div>
                             </div>
                             <div class="military-power">
-                                <h4>⚡ Poder Militar Total: <strong id="militaryPowerDisplay">0</strong></h4>
+                                <span>Poder Militar Total: ⚔️ <strong id="militaryPowerDisplay">0</strong></span>
                             </div>
                         </div>
 
-                        <div class="ranking-section">
-                            <h3>🏆 Ranking de Naciones</h3>
-                            <div id="rankingList" class="ranking-list">-</div>
-                            <div id="attacksLog" class="attacks-log"></div>
+                        <div id="rankingList" class="ranking-section">
+                            <h3>Ranking de Naciones</h3>
+                            <p>Cargando ranking...</p>
+                        </div>
+
+                        <div id="attacksLog" class="attacks-log">
+                            <h3>Ataques Recientes</h3>
+                            <p>No hay ataques registrados.</p>
                         </div>
                     </div>
                 </section>
@@ -296,10 +304,19 @@
     </div>
 
     <!-- SCRIPTS -->
-    <script type="module" src="firebase-config.js"></script>
-    <script type="module" src="auth.js"></script>
     <script type="module" src="game.js"></script>
-
-
+    <script>
+        // Funciones de cambio de pestaña (Switch Tabs)
+        function switchToRegister(e) {
+            if (e) e.preventDefault();
+            document.getElementById('loginForm').classList.remove('active');
+            document.getElementById('registerForm').classList.add('active');
+        }
+        function switchToLogin(e) {
+            if (e) e.preventDefault();
+            document.getElementById('registerForm').classList.remove('active');
+            document.getElementById('loginForm').classList.add('active');
+        }
+    </script>
 </body>
 </html>
