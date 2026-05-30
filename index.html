@@ -13,22 +13,24 @@
     <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png">
     <style>
         /* ESTILOS ADICIONALES PARA LAS NUEVAS SECCIONES (INYECTADOS QUIRÚRGICAMENTE) */
-        .chat-sidebar { width: 300px; background: #1a1c23; border-left: 1px solid #2d303e; display: flex; flex-direction: column; color: #e2e8f0; }
-        .chat-header { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid #2d303e; }
-        .chat-tab { padding: 12px; border: none; cursor: pointer; background: #2d303e; color: #94a3b8; font-weight: 600; transition: 0.3s; }
-        .chat-tab.active { background: #1a1c23; color: #fff; border-bottom: 2px solid #3498db; }
-        .chat-messages { flex-grow: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px; max-height: calc(100vh - 200px); }
-        .chat-msg { padding: 10px 14px; background: #2d303e; color: #f8fafc; border-radius: 8px; font-size: 0.9rem; border: 1px solid #3f445b; }
+        .chat-sidebar { width: 300px; background: #1a1c23; border-left: 1px solid #2d303e; display: flex; flex-direction: column; color: #fff; }
+        .chat-header { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid #2d303e; background: #1a1c23; }
+        .chat-tab { padding: 12px; border: none; cursor: pointer; background: #2d303e; color: #fff; font-weight: 600; transition: 0.3s; border-bottom: 2px solid transparent; }
+        .chat-tab:hover { background: #3f445b; }
+        .chat-tab.active { background: #1a1c23; color: #f39c12; border-bottom: 2px solid #f39c12; text-shadow: 0 0 10px rgba(243, 156, 18, 0.5); }
+        .chat-messages { flex-grow: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px; max-height: calc(100vh - 200px); background: #1a1c23; }
+        .chat-msg { padding: 10px 14px; background: #2d303e; color: #fff; border-radius: 8px; font-size: 0.9rem; border: 1px solid #3f445b; }
         .chat-input-area { padding: 15px; border-top: 1px solid #2d303e; display: flex; gap: 8px; background: #1a1c23; }
         .chat-input-area input { flex-grow: 1; padding: 10px; background: #2d303e; border: 1px solid #3f445b; border-radius: 6px; color: #fff; outline: none; }
         .chat-input-area input::placeholder { color: #64748b; }
-        .chat-input-area button { padding: 10px 15px; background: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer; transition: 0.3s; }
-        .chat-input-area button:hover { background: #2980b9; }
-        .laws-grid, .alliance-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; padding: 20px; }
-        .law-card, .alliance-card { background: #1a1c23; color: #fff; padding: 25px; border-radius: 12px; border: 1px solid #2d303e; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
-        .law-card h3, .alliance-card h3 { color: #3498db; margin-bottom: 10px; }
-        .law-card p, .alliance-card p { color: #94a3b8; font-size: 0.95rem; line-height: 1.5; }
-        #chatMessages strong { color: #3498db !important; }
+        .chat-input-area button { padding: 10px 15px; background: #f39c12; color: white; border: none; border-radius: 6px; cursor: pointer; transition: 0.3s; font-weight: bold; }
+        .chat-input-area button:hover { background: #e67e22; box-shadow: 0 0 10px rgba(243, 156, 18, 0.3); }
+        .laws-grid, .alliance-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; padding: 20px; background: #1a1c23; }
+        .law-card, .alliance-card { background: #2d303e; color: #fff; padding: 25px; border-radius: 12px; border: 1px solid #3f445b; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        .law-card h3, .alliance-card h3 { color: #f39c12; margin-bottom: 10px; }
+        .law-card p, .alliance-card p { color: #bdc3c7; font-size: 0.95rem; line-height: 1.5; }
+        #chatMessages strong { color: #f39c12 !important; }
+        .chat-notice { color: #bdc3c7; font-style: italic; text-align: center; padding: 10px; }
     </style>
 </head>
 <body>
