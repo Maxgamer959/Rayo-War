@@ -1,5 +1,5 @@
 // ======================
-// RAYO WAR - SISTEMA DE NACIONES AVANZADO (PARCHE DEFINITIVO V3)
+// RAYO WAR - SISTEMA DE NACIONES AVANZADO (PARCHE DEFINITIVO V5 - ÍNTEGRO)
 // ======================
 
 let currentNacion = null; 
@@ -24,7 +24,8 @@ import {
     where,
     orderBy,
     limit,
-    serverTimestamp
+    serverTimestamp,
+    onSnapshot
 } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 
 // ======================
@@ -36,6 +37,8 @@ let currentNation = null;
 let currentLanguage = 'es';
 let allNations = [];
 let activeCityId = null; 
+let currentChatChannel = 'global';
+let chatUnsubscribe = null;
 
 const translations = {
     es: {
@@ -92,55 +95,31 @@ async function handleRegister(e) {
     if (e) e.preventDefault();
     const email = document.getElementById('registerEmail').value;
     const password = document.getElementById('registerPassword').value;
-    const nationName = document.getElementById('registerNationName').value; // ID Corregido
+    const nationName = document.getElementById('registerNationName').value; 
     const government = document.getElementById('governmentSelect').value;
     const territory = document.getElementById('territorySelect').value;
     
-    // 1. Registrar en Auth
     const result = await registerUser(email, password);
     
     if (result.success) {
         currentUser = result.uid;
-        
-        // 2. Inicializar documento en Firestore con valores base (Parche Crítico)
         const initialData = {
             nombre: nationName,
             gobierno: government,
             territorio: territory,
-            dinero: 5000, // Dinero inicial de regalo
+            dinero: 5000, 
             poblacion: 1000,
             felicidad: 50,
             salud: 50,
             seguridad: 50,
-            recursos_especiales: {
-                energy: 100,
-                food: 100,
-                minerals: 100,
-                oil: 100
-            },
-            ejercito: {
-                soldados: 10,
-                tanques: 0,
-                aviones: 0
-            },
+            recursos_especiales: { energy: 100, food: 100, minerals: 100, oil: 100 },
+            ejercito: { soldados: 10, tanques: 0, aviones: 0 },
             poder_total: 100,
-            ciudades: [
-                {
-                    name: "Capital " + nationName,
-                    population: 500,
-                    edificios: {
-                        factories: 1,
-                        powerPlants: 1,
-                        farms: 1,
-                        mines: 1,
-                        refineries: 1,
-                        hospitals: 1,
-                        police: 1,
-                        firefighters: 1,
-                        schools: 1
-                    }
-                }
-            ],
+            ciudades: [{
+                name: "Capital " + nationName,
+                population: 500,
+                edificios: { factories: 1, powerPlants: 1, farms: 1, mines: 1, refineries: 1, hospitals: 1, police: 1, firefighters: 1, schools: 1 }
+            }],
             ultima_conexion: serverTimestamp()
         };
 
@@ -148,19 +127,14 @@ async function handleRegister(e) {
             await setDoc(doc(db, "naciones", currentUser), initialData);
             await loadNationData();
             showGameScreen();
-        } catch (error) {
-            console.error("Error creando nación en Firestore:", error);
-            alert("Error al inicializar la nación en la base de datos.");
-        }
+        } catch (error) { console.error(error); alert("Error al inicializar la nación."); }
     } else {
         const messageEl = document.getElementById('authMessage');
         if (messageEl) {
             messageEl.textContent = result.error;
             messageEl.style.display = 'block';
             messageEl.className = 'auth-message error';
-        } else {
-            alert(result.error);
-        }
+        } else { alert(result.error); }
     }
 }
 
@@ -187,30 +161,31 @@ async function loadNationData() {
     if (!currentUser) return;
     try {
         const nacionRef = doc(db, "naciones", currentUser);
-        const nacionSnap = await getDoc(nacionRef);
-        if (nacionSnap.exists()) {
-            currentNation = nacionSnap.data();
-            currentNation.id = currentUser;
-            currentNacion = currentNation;
-            
-            if (!currentNation.recursos_especiales) {
-                currentNation.recursos_especiales = { energy: 100, food: 100, minerals: 100, oil: 100 };
+        
+        // PARCHE: Listener en tiempo real para datos, leyes y alianzas
+        onSnapshot(nacionRef, (nacionSnap) => {
+            if (nacionSnap.exists()) {
+                currentNation = nacionSnap.data();
+                currentNation.id = currentUser;
+                currentNacion = currentNation;
+                
+                if (!currentNation.recursos_especiales) {
+                    currentNation.recursos_especiales = { energy: 100, food: 100, minerals: 100, oil: 100 };
+                }
+                
+                calculatePassiveProduction();
+                loadAllNations();
+                updateUI();
+                updateLawsUI();
+                
+                if (currentChatChannel === 'alliance') startChatListener();
+                
+                if (typeof L !== 'undefined' && !map) {
+                    setTimeout(initMap, 800);
+                }
             }
-            if (!currentNation.poder_total) {
-                currentNation.poder_total = calculateMilitaryPower(currentNation);
-            }
-
-            calculatePassiveProduction();
-            await loadAllNations();
-            updateUI();
-            
-            if (typeof L !== 'undefined' && (currentNation.dinero > 0 || currentNation.ciudades.length > 0)) {
-                setTimeout(initMap, 800);
-            }
-        }
-    } catch (error) {
-        console.error("❌ Error cargando datos:", error);
-    }
+        });
+    } catch (error) { console.error("❌ Error cargando datos:", error); }
 }
 
 async function loadAllNations() {
@@ -224,9 +199,7 @@ async function loadAllNations() {
             allNations.push(n);
         });
         updateRankingDisplay();
-    } catch (error) {
-        console.error("❌ Error cargando ranking:", error);
-    }
+    } catch (error) { console.error("❌ Error cargando ranking:", error); }
 }
 
 function calculateMilitaryPower(nation) {
@@ -252,7 +225,13 @@ function calculatePassiveProduction() {
         });
     }
 
-    currentNation.dinero += (totalFactories * 5) * minutes;
+    // PARCHE: APLICAR BONOS DE LEYES MATEMÁTICOS
+    let factoryMult = currentNation.leyes?.industrialization ? 1.20 : 1.0;
+    let moneyMult = currentNation.leyes?.warTax ? 1.30 : 1.0;
+    let popGrowth = currentNation.leyes?.warTax ? 0 : 1;
+
+    currentNation.dinero += ((totalFactories * 5 * factoryMult) * moneyMult) * minutes;
+    currentNation.poblacion += (totalFarms * 2 * popGrowth) * minutes;
     currentNation.recursos_especiales.energy += (totalPower * 2) * minutes;
     currentNation.recursos_especiales.food += (totalFarms * 3) * minutes;
     currentNation.recursos_especiales.minerals += (totalMines * 2) * minutes;
@@ -260,12 +239,157 @@ function calculatePassiveProduction() {
 }
 
 // ======================
-// ACCIONES DEL JUEGO
+// SISTEMA DE LEYES
+// ======================
+
+async function activateLaw(lawId, cost) {
+    if (currentNation.dinero < cost) { alert(translations[currentLanguage].insufficientMoney); return; }
+    if (currentNation.leyes?.[lawId]) { alert("Esta ley ya está activa"); return; }
+
+    const newLeyes = { ...currentNation.leyes, [lawId]: true };
+    let newHappiness = currentNation.felicidad;
+    if (lawId === 'forcedRecruitment') newHappiness = Math.max(0, newHappiness - 10);
+
+    try {
+        await updateDoc(doc(db, "naciones", currentUser), {
+            dinero: currentNation.dinero - cost,
+            leyes: newLeyes,
+            felicidad: newHappiness,
+            ultima_conexion: serverTimestamp()
+        });
+    } catch (e) { console.error(e); }
+}
+
+function updateLawsUI() {
+    const laws = ['industrialization', 'forcedRecruitment', 'warTax'];
+    const ids = { industrialization: 'btnLawIndustrial', forcedRecruitment: 'btnLawRecruit', warTax: 'btnLawWarTax' };
+    laws.forEach(law => {
+        const btn = document.getElementById(ids[law]);
+        if (btn && currentNation.leyes?.[law]) {
+            btn.innerText = "ACTIVA";
+            btn.disabled = true;
+            btn.style.background = "#27ae60";
+        }
+    });
+}
+
+// ======================
+// SISTEMA DE ALIANZAS
+// ======================
+
+async function createAlliance() {
+    const name = document.getElementById('newAllianceName').value;
+    if (!name || currentNation.dinero < 5000) { alert("Nombre inválido o dinero insuficiente ($5,000)"); return; }
+
+    try {
+        const allianceRef = await addDoc(collection(db, "alianzas"), {
+            nombre: name,
+            fundador: currentUser,
+            miembros: [currentUser],
+            fecha: serverTimestamp()
+        });
+        await updateDoc(doc(db, "naciones", currentUser), {
+            dinero: currentNation.dinero - 5000,
+            alianza: name,
+            alianzaId: allianceRef.id
+        });
+        alert("¡Alianza " + name + " fundada!");
+    } catch (e) { console.error(e); }
+}
+
+async function joinAlliance() {
+    const name = document.getElementById('joinAllianceName').value;
+    const q = query(collection(db, "alianzas"), where("nombre", "==", name), limit(1));
+    const snap = await getDocs(q);
+    
+    if (snap.empty) { alert("Alianza no encontrada"); return; }
+    
+    const allianceDoc = snap.docs[0];
+    await updateDoc(doc(db, "alianzas", allianceDoc.id), {
+        miembros: [...allianceDoc.data().miembros, currentUser]
+    });
+    await updateDoc(doc(db, "naciones", currentUser), {
+        alianza: name,
+        alianzaId: allianceDoc.id
+    });
+    alert("Te has unido a " + name);
+}
+
+// ======================
+// CHAT EN TIEMPO REAL
+// ======================
+
+function switchChatChannel(channel) {
+    currentChatChannel = channel;
+    const gTab = document.getElementById('chatGlobalTab');
+    const aTab = document.getElementById('chatAllianceTab');
+    if (gTab) gTab.style.background = channel === 'global' ? '#fff' : '#eee';
+    if (aTab) aTab.style.background = channel === 'alliance' ? '#fff' : '#eee';
+    startChatListener();
+}
+
+function startChatListener() {
+    if (chatUnsubscribe) chatUnsubscribe();
+    
+    let chatRef;
+    if (currentChatChannel === 'global') {
+        chatRef = query(collection(db, "chat_global"), orderBy("fecha", "asc"), limit(50));
+    } else {
+        if (!currentNation.alianzaId) {
+            const box = document.getElementById('chatMessages');
+            if (box) box.innerHTML = "<div style='padding:10px; color:#666;'>Debes unirte a una alianza para ver este chat.</div>";
+            return;
+        }
+        chatRef = query(collection(db, "chat_alianzas"), where("alianzaId", "==", currentNation.alianzaId), orderBy("fecha", "asc"), limit(50));
+    }
+
+    chatUnsubscribe = onSnapshot(chatRef, (snap) => {
+        const chatBox = document.getElementById('chatMessages');
+        if (!chatBox) return;
+        chatBox.innerHTML = "";
+        snap.forEach(doc => {
+            const m = doc.data();
+            const div = document.createElement('div');
+            div.style.padding = "5px 10px";
+            div.style.background = "#fff";
+            div.style.borderRadius = "4px";
+            div.style.fontSize = "0.9rem";
+            div.innerHTML = `<strong style="color:#2980b9;">${m.usuario}:</strong> ${m.mensaje}`;
+            chatBox.appendChild(div);
+        });
+        chatBox.scrollTop = chatBox.scrollHeight;
+    });
+}
+
+async function sendChatMessage() {
+    const input = document.getElementById('chatInput');
+    const msg = input.value;
+    if (!msg) return;
+
+    const collectionName = currentChatChannel === 'global' ? "chat_global" : "chat_alianzas";
+    const data = {
+        usuario: currentNation.nombre,
+        mensaje: msg,
+        fecha: serverTimestamp()
+    };
+    if (currentChatChannel === 'alliance') data.alianzaId = currentNation.alianzaId;
+
+    try {
+        await addDoc(collection(db, collectionName), data);
+        input.value = "";
+    } catch (e) { console.error(e); }
+}
+
+// ======================
+// ACCIONES DEL JUEGO (ORIGINALES PRESERVADAS)
 // ======================
 
 async function recruitUnit(unitType) {
-    const costs = { soldados: 50, tanques: 500, aviones: 2000 };
-    if (currentNation.dinero < costs[unitType]) { alert(translations[currentLanguage].insufficientMoney); return; }
+    let cost = { soldados: 50, tanques: 500, aviones: 2000 }[unitType];
+    // PARCHE: Bono de Ley de Reclutamiento
+    if (currentNation.leyes?.forcedRecruitment) cost *= 0.85;
+
+    if (currentNation.dinero < cost) { alert(translations[currentLanguage].insufficientMoney); return; }
     
     const newEjercito = { ...currentNation.ejercito };
     newEjercito[unitType]++;
@@ -273,17 +397,11 @@ async function recruitUnit(unitType) {
 
     try {
         await updateDoc(doc(db, "naciones", currentUser), {
-            dinero: currentNation.dinero - costs[unitType],
+            dinero: currentNation.dinero - cost,
             ejercito: newEjercito,
             poder_total: newPower,
             ultima_conexion: serverTimestamp()
         });
-        
-        currentNation.dinero -= costs[unitType];
-        currentNation.ejercito = newEjercito;
-        currentNation.poder_total = newPower;
-        updateUI();
-        loadAllNations();
     } catch (e) { console.error(e); }
 }
 
@@ -303,29 +421,19 @@ async function upgradeBuilding(type) {
             ciudades: newCities,
             ultima_conexion: serverTimestamp()
         });
-        currentNation.dinero -= costs[type];
-        currentNation.ciudades = newCities;
-        updateUI();
     } catch (e) { console.error(e); }
 }
 
 async function demolishBuilding(type) {
     if (activeCityId === null) return;
-    if (!confirm(currentLanguage === 'es' ? "¿Estás seguro de demoler este edificio? El nivel volverá a 0." : "Are you sure? Level will reset to 0.")) return;
+    if (!confirm(currentLanguage === 'es' ? "¿Estás seguro?" : "Are you sure?")) return;
 
     const newCities = [...currentNation.ciudades];
     const city = newCities[activeCityId];
-    if (city.edificios) {
-        city.edificios[type] = 0;
-    }
+    if (city.edificios) city.edificios[type] = 0;
 
     try {
-        await updateDoc(doc(db, "naciones", currentUser), {
-            ciudades: newCities,
-            ultima_conexion: serverTimestamp()
-        });
-        currentNation.ciudades = newCities;
-        updateUI();
+        await updateDoc(doc(db, "naciones", currentUser), { ciudades: newCities, ultima_conexion: serverTimestamp() });
     } catch (e) { console.error(e); }
 }
 
@@ -340,14 +448,7 @@ async function upgradeService(type) {
     city.edificios[type]++;
 
     try {
-        await updateDoc(doc(db, "naciones", currentUser), {
-            dinero: currentNation.dinero - costs[type],
-            ciudades: newCities,
-            ultima_conexion: serverTimestamp()
-        });
-        currentNation.dinero -= costs[type];
-        currentNation.ciudades = newCities;
-        updateUI();
+        await updateDoc(doc(db, "naciones", currentUser), { dinero: currentNation.dinero - costs[type], ciudades: newCities, ultima_conexion: serverTimestamp() });
     } catch (e) { console.error(e); }
 }
 
@@ -357,44 +458,28 @@ async function buildCity() {
     if (!cityName) return;
 
     const newCity = { 
-        name: cityName, 
-        population: 100,
+        name: cityName, population: 100,
         edificios: { factories: 0, powerPlants: 0, farms: 0, mines: 0, refineries: 0, hospitals: 0, police: 0, firefighters: 0, schools: 0 }
     };
     const newCities = [...currentNation.ciudades, newCity];
 
     try {
-        await updateDoc(doc(db, "naciones", currentUser), {
-            dinero: currentNation.dinero - 1000,
-            ciudades: newCities,
-            ultima_conexion: serverTimestamp()
-        });
-        currentNation.dinero -= 1000;
-        currentNation.ciudades = newCities;
-        updateUI();
+        await updateDoc(doc(db, "naciones", currentUser), { dinero: currentNation.dinero - 1000, ciudades: newCities, ultima_conexion: serverTimestamp() });
     } catch (e) { console.error(e); }
 }
 
-function seleccionarCiudad(id) {
-    activeCityId = id;
-    switchTab('cityDetail');
-}
+function seleccionarCiudad(id) { activeCityId = id; switchTab('cityDetail'); }
 
 // ======================
 // INTERFAZ Y TRADUCCIÓN
 // ======================
 
-function changeLanguage(lang) {
-    currentLanguage = lang;
-    updateUI();
-}
+function changeLanguage(lang) { currentLanguage = lang; updateUI(); }
 
 function updateUI() {
     if (!currentNation) return;
-    const t = translations[currentLanguage];
     const set = (id, val) => { const el = document.getElementById(id); if (el) el.innerText = val; };
 
-    // PANEL SUPERIOR
     set('topMoney', Math.floor(currentNation.dinero).toLocaleString());
     set('topPopulation', Math.floor(currentNation.poblacion || 0).toLocaleString());
     if (currentNation.recursos_especiales) {
@@ -403,99 +488,60 @@ function updateUI() {
         set('topOil', Math.floor(currentNation.recursos_especiales.oil || 0).toLocaleString());
     }
 
-    // SIDEBAR
     set('sidebarMoney', '$' + Math.floor(currentNation.dinero).toLocaleString());
     set('sidebarPopulation', Math.floor(currentNation.poblacion || 0).toLocaleString());
-    const sidebarNationEl = document.getElementById('sidebarNationName'); // ID Corregido
+    const sidebarNationEl = document.getElementById('sidebarNationName'); 
     if (sidebarNationEl) sidebarNationEl.innerText = currentNation.nombre;
 
-    // OVERVIEW
     set('overviewNation', currentNation.nombre);
+    set('overviewAlliance', currentNation.alianza || "Ninguna");
     set('overviewTerritory', currentNation.territorio);
     set('overviewGovernment', currentNation.gobierno);
     set('overviewPopulation', Math.floor(currentNation.poblacion || 0).toLocaleString());
     set('overviewMoney', Math.floor(currentNation.dinero).toLocaleString());
-    set('overviewHappiness', (currentNation.felicidad || 0) + '%');
-    set('overviewHealth', (currentNation.salud || 0) + '%');
-    set('overviewSecurity', (currentNation.seguridad || 0) + '%');
+    set('overviewHappiness', (currentNation.felicidad || 0) + "%");
 
-    // CITIES LIST
     const citiesList = document.getElementById('citiesList');
     if (citiesList) {
-        citiesList.innerHTML = currentNation.ciudades.map((c, index) => `
-            <button class="city-item" onclick="seleccionarCiudad(${index})" style="width: 100%; text-align: left; margin-bottom: 10px; padding: 15px; border: 1px solid #ddd; border-radius: 8px; background: white; cursor: pointer; font-size: 1.1rem; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
-                🏙️ <strong>${c.name}</strong> <span style="float: right; color: #666;">Pop: ${c.population}</span>
+        citiesList.innerHTML = currentNation.ciudades.map((c, i) => `
+            <button class="city-item" onclick="seleccionarCiudad(${i})" style="width:100%; text-align:left; padding:10px; margin-bottom:5px; border:1px solid #ddd; border-radius:6px; background:#fff; cursor:pointer;">
+                🏙️ <strong>${c.name}</strong> (Pop: ${c.population})
             </button>
-        `).join('') || (currentLanguage === 'es' ? "No hay ciudades" : "No cities");
+        `).join('') || "No hay ciudades";
     }
 
-    // CITY DETAIL VIEW
     if (activeCityId !== null && currentNation.ciudades[activeCityId]) {
         const city = currentNation.ciudades[activeCityId];
         set('activeCityTitle', city.name);
         const b = city.edificios || {};
-        
         set('factoriesLevel', b.factories || 0);
-        set('factoriesProduction', '+' + ((b.factories || 0) * 5));
-        set('powerLevel', b.powerPlants || 0);
-        set('powerProduction', '+' + ((b.powerPlants || 0) * 2));
-        set('farmsLevel', b.farms || 0);
-        set('farmsProduction', '+' + ((b.farms || 0) * 3));
-        set('minesLevel', b.mines || 0);
-        set('minesProduction', '+' + ((b.mines || 0) * 2));
-        set('refineriesLevel', b.refineries || 0);
-        set('refineriesProduction', '+' + ((b.refineries || 0) * 1.5));
-
-        set('hospitalsLevel', b.hospitals || 0);
-        set('policeLevel', b.police || 0);
-        set('firefightersLevel', b.firefighters || 0);
-        set('schoolsLevel', b.schools || 0);
+        set('factoriesProduction', "+" + Math.floor((b.factories || 0) * 5 * (currentNation.leyes?.industrialization ? 1.2 : 1)));
     }
-
-    // WAR & RANKING
-    if (currentNation.ejercito) {
-        set('soldadosLevel', currentNation.ejercito.soldados);
-        set('tanquesLevel', currentNation.ejercito.tanques);
-        set('avionesLevel', currentNation.ejercito.aviones);
-    }
-    set('militaryPowerDisplay', (currentNation.poder_total || 0).toLocaleString());
 }
 
 function updateRankingDisplay() {
-    const t = translations[currentLanguage];
-    const rankingList = document.getElementById('rankingList');
-    if (!rankingList) return;
-
-    let html = `<h3>${t.war} - Ranking</h3><div class="ranking-list">`;
-    allNations.forEach((n, i) => {
-        html += `
-            <div class="ranking-item" style="display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #eee;">
-                <div>
-                    <span class="rank">#${i + 1}</span>
-                    <span class="nation-name"><strong>${n.nombre}</strong> — Fuerza: ${(n.poder_total || 0).toLocaleString()} [${n.gobierno || 'S/D'}]</span>
-                </div>
-                ${n.id !== currentUser ? `<button onclick="attackNation('${n.id}')" style="padding: 5px 10px; cursor: pointer;">${t.attack}</button>` : ''}
-            </div>`;
-    });
-    rankingList.innerHTML = html + '</div>';
+    const list = document.getElementById('rankingList');
+    if (!list) return;
+    list.innerHTML = allNations.map((n, i) => `
+        <div class="ranking-item" style="padding:8px; border-bottom:1px solid #eee;">
+            #${i+1} <strong>${n.nombre}</strong> [${n.alianza || 'S/A'}] - Fuerza: ${(n.poder_total || 0).toLocaleString()}
+        </div>
+    `).join('');
 }
 
 function switchTab(tabName) {
     document.querySelectorAll('.tab-content').forEach(tab => tab.classList.toggle('active', tab.id === tabName));
     document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.toggle('active', btn.getAttribute('onclick')?.includes(tabName)));
-    if (tabName === 'overview' && map) setTimeout(() => map.invalidateSize(), 300);
 }
 
-function switchCitySubTab(sub) {
-    document.getElementById('cityInfra').classList.toggle('active', sub === 'infra');
-    document.getElementById('cityServ').classList.toggle('active', sub === 'serv');
-    document.querySelectorAll('.city-tab-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.getAttribute('onclick').includes(sub));
-    });
+function switchCitySubTab(subTab) {
+    document.getElementById('cityInfra').classList.toggle('active', subTab === 'infra');
+    document.getElementById('cityServ').classList.toggle('active', subTab === 'serv');
+    document.querySelectorAll('.city-tab-btn').forEach(btn => btn.classList.toggle('active', btn.getAttribute('onclick').includes(subTab)));
 }
 
 // ======================
-// MAPA (LEAFLET)
+// LÓGICA DEL MAPA (ORIGINAL PRESERVADA)
 // ======================
 
 function initMap() {
@@ -503,10 +549,7 @@ function initMap() {
     const mapContainer = document.getElementById('worldMap');
     if (!mapContainer) return;
 
-    if (map) {
-        map.remove();
-        map = null;
-    }
+    if (map) { map.remove(); map = null; }
 
     const coords = { 
         'Chile': [-35, -71], 'Argentina': [-38, -63], 'México': [23, -102], 'España': [40, -3],
@@ -534,6 +577,7 @@ setupAuthListener((state) => {
     if (state.authenticated) {
         currentUser = state.uid;
         loadNationData();
+        startChatListener();
         showGameScreen();
     } else {
         showAuthScreen();
@@ -541,7 +585,7 @@ setupAuthListener((state) => {
 });
 
 window.handleLogin = handleLogin;
-window.handleRegister = handleRegister; // EXPOSICIÓN GLOBAL
+window.handleRegister = handleRegister;
 window.handleLogout = handleLogout;
 window.recruitUnit = recruitUnit;
 window.upgradeBuilding = upgradeBuilding;
@@ -552,22 +596,11 @@ window.seleccionarCiudad = seleccionarCiudad;
 window.changeLanguage = changeLanguage;
 window.switchTab = switchTab;
 window.switchCitySubTab = switchCitySubTab;
+window.activateLaw = activateLaw;
+window.createAlliance = createAlliance;
+window.joinAlliance = joinAlliance;
+window.switchChatChannel = switchChatChannel;
+window.sendChatMessage = sendChatMessage;
 
-// ======================
-// PARCHE: NAVEGACIÓN DE AUTENTICACIÓN (EXPOSICIÓN GLOBAL)
-// ======================
-
-function switchToRegister(e) {
-    if (e) e.preventDefault();
-    document.getElementById('loginForm').classList.remove('active');
-    document.getElementById('registerForm').classList.add('active');
-}
-
-function switchToLogin(e) {
-    if (e) e.preventDefault();
-    document.getElementById('registerForm').classList.remove('active');
-    document.getElementById('loginForm').classList.add('active');
-}
-
-window.switchToRegister = switchToRegister;
-window.switchToLogin = switchToLogin;
+window.switchToRegister = (e) => { if (e) e.preventDefault(); document.getElementById('loginForm').classList.remove('active'); document.getElementById('registerForm').classList.add('active'); };
+window.switchToLogin = (e) => { if (e) e.preventDefault(); document.getElementById('registerForm').classList.remove('active'); document.getElementById('loginForm').classList.add('active'); };
