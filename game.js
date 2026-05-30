@@ -1,5 +1,5 @@
 // ======================
-// RAYO WAR - SISTEMA DE NACIONES AVANZADO (CORREGIDO V2)
+// RAYO WAR - SISTEMA DE NACIONES AVANZADO (PARCHE DEFINITIVO)
 // ======================
 
 let currentNacion = null; 
@@ -39,8 +39,6 @@ let activeCityId = null;
 const translations = {
     es: {
         overview: '📊 Resumen',
-        infrastructure: '🏗️ Infraestructura',
-        services: '🏥 Servicios',
         cities: '🏙️ Ciudades',
         war: '⚔️ Guerra',
         money: '💰 Dinero',
@@ -49,26 +47,13 @@ const translations = {
         minerals: '⛏️ Minerales',
         oil: '🛢️ Petróleo',
         population: '👥 Población',
-        happiness: '😊 Felicidad',
-        health: '🏥 Salud',
-        security: '🛡️ Seguridad',
-        soldiers: '🪖 Soldados',
-        tanks: '🚜 Tanques',
-        planes: '✈️ Aviones',
-        militaryPower: '⚔️ Poder Militar',
-        recruit: 'Reclutar',
-        upgrade: 'Mejorar',
-        build: 'Construir',
-        insufficientMoney: '❌ Dinero insuficiente',
-        cityRequired: '🔒 Requiere una Ciudad construida',
         attack: '⚔️ Atacar',
         logout: 'Cerrar Sesión',
-        selectCity: 'Selecciona una ciudad primero'
+        selectCity: 'Selecciona una ciudad primero',
+        insufficientMoney: '❌ Dinero insuficiente'
     },
     en: {
         overview: '📊 Overview',
-        infrastructure: '🏗️ Infrastructure',
-        services: '🏥 Services',
         cities: '🏙️ Cities',
         war: '⚔️ War',
         money: '💰 Money',
@@ -77,21 +62,10 @@ const translations = {
         minerals: '⛏️ Minerals',
         oil: '🛢️ Oil',
         population: '👥 Population',
-        happiness: '😊 Happiness',
-        health: '🏥 Health',
-        security: '🛡️ Security',
-        soldiers: '🪖 Soldiers',
-        tanks: '🚜 Tanks',
-        planes: '✈️ Planes',
-        militaryPower: '⚔️ Military Power',
-        recruit: 'Recruit',
-        upgrade: 'Upgrade',
-        build: 'Build',
-        insufficientMoney: '❌ Insufficient money',
-        cityRequired: '🔒 Requires a City built',
         attack: '⚔️ Attack',
         logout: 'Logout',
-        selectCity: 'Select a city first'
+        selectCity: 'Select a city first',
+        insufficientMoney: '❌ Insufficient money'
     }
 };
 
@@ -173,17 +147,12 @@ async function loadNationData() {
                 currentNation.poder_total = calculateMilitaryPower(currentNation);
             }
 
-            // Inicializar ciudad activa
-            if (currentNation.ciudades && currentNation.ciudades.length > 0 && activeCityId === null) {
-                activeCityId = 0;
-            }
-
             calculatePassiveProduction();
             await loadAllNations();
             updateUI();
             
-            // ERROR CRÍTICO: El mapa solo se carga si hay datos válidos
-            if (currentNation.dinero > 0 || currentNation.ciudades.length > 0) {
+            // Cargar mapa solo si hay datos y Leaflet está listo
+            if (typeof L !== 'undefined' && (currentNation.dinero > 0 || currentNation.ciudades.length > 0)) {
                 setTimeout(initMap, 800);
             }
         }
@@ -266,8 +235,7 @@ async function recruitUnit(unitType) {
 }
 
 async function upgradeBuilding(type) {
-    if (activeCityId === null) { alert(translations[currentLanguage].selectCity); return; }
-    
+    if (activeCityId === null) return;
     const costs = { factories: 500, powerPlants: 600, farms: 400, mines: 700, refineries: 800 };
     if (currentNation.dinero < costs[type]) { alert(translations[currentLanguage].insufficientMoney); return; }
 
@@ -282,16 +250,35 @@ async function upgradeBuilding(type) {
             ciudades: newCities,
             ultima_conexion: serverTimestamp()
         });
-
         currentNation.dinero -= costs[type];
         currentNation.ciudades = newCities;
         updateUI();
     } catch (e) { console.error(e); }
 }
 
+// PARCHE DEFINITIVO: Función de Demolición
+async function demolishBuilding(type) {
+    if (activeCityId === null) return;
+    if (!confirm(currentLanguage === 'es' ? "¿Estás seguro de demoler este edificio? El nivel volverá a 0." : "Are you sure? Level will reset to 0.")) return;
+
+    const newCities = [...currentNation.ciudades];
+    const city = newCities[activeCityId];
+    if (city.edificios) {
+        city.edificios[type] = 0;
+    }
+
+    try {
+        await updateDoc(doc(db, "naciones", currentUser), {
+            ciudades: newCities,
+            ultima_conexion: serverTimestamp()
+        });
+        currentNation.ciudades = newCities;
+        updateUI();
+    } catch (e) { console.error(e); }
+}
+
 async function upgradeService(type) {
-    if (activeCityId === null) { alert(translations[currentLanguage].selectCity); return; }
-    
+    if (activeCityId === null) return;
     const costs = { hospitals: 800, police: 600, firefighters: 700, schools: 500 };
     if (currentNation.dinero < costs[type]) { alert(translations[currentLanguage].insufficientMoney); return; }
 
@@ -306,7 +293,6 @@ async function upgradeService(type) {
             ciudades: newCities,
             ultima_conexion: serverTimestamp()
         });
-
         currentNation.dinero -= costs[type];
         currentNation.ciudades = newCities;
         updateUI();
@@ -331,17 +317,16 @@ async function buildCity() {
             ciudades: newCities,
             ultima_conexion: serverTimestamp()
         });
-
         currentNation.dinero -= 1000;
         currentNation.ciudades = newCities;
-        if (activeCityId === null) activeCityId = currentNation.ciudades.length - 1;
         updateUI();
     } catch (e) { console.error(e); }
 }
 
+// PARCHE DEFINITIVO: Seleccionar ciudad abre menú pantalla completa
 function seleccionarCiudad(id) {
     activeCityId = id;
-    updateUI();
+    switchTab('cityDetail');
 }
 
 // ======================
@@ -358,13 +343,22 @@ function updateUI() {
     const t = translations[currentLanguage];
     const set = (id, val) => { const el = document.getElementById(id); if (el) el.innerText = val; };
 
-    // SINCRO SIDEBAR
+    // PARCHE DEFINITIVO: PANEL SUPERIOR
+    set('topMoney', Math.floor(currentNation.dinero).toLocaleString());
+    set('topPopulation', Math.floor(currentNation.poblacion || 0).toLocaleString());
+    if (currentNation.recursos_especiales) {
+        set('topCopper', Math.floor(currentNation.recursos_especiales.minerals || 0).toLocaleString());
+        set('topAluminum', Math.floor(currentNation.recursos_especiales.energy || 0).toLocaleString()); // Usando energía como aluminio para el ejemplo visual
+        set('topOil', Math.floor(currentNation.recursos_especiales.oil || 0).toLocaleString());
+    }
+
+    // SIDEBAR
     set('sidebarMoney', '$' + Math.floor(currentNation.dinero).toLocaleString());
     set('sidebarPopulation', Math.floor(currentNation.poblacion || 0).toLocaleString());
     const nationNameEl = document.querySelector('#sidebar #nationName');
     if (nationNameEl) nationNameEl.innerText = currentNation.nombre;
 
-    // ERROR 1: SINCRO RESUMEN (Overview)
+    // OVERVIEW
     set('overviewNation', currentNation.nombre);
     set('overviewTerritory', currentNation.territorio);
     set('overviewGovernment', currentNation.gobierno);
@@ -374,43 +368,40 @@ function updateUI() {
     set('overviewHealth', (currentNation.salud || 0) + '%');
     set('overviewSecurity', (currentNation.seguridad || 0) + '%');
 
-    // ERROR 2: PRODUCCIÓN POR MINUTO
-    const activeCity = (activeCityId !== null && currentNation.ciudades[activeCityId]) ? currentNation.ciudades[activeCityId] : null;
-    const b = activeCity ? (activeCity.edificios || {}) : {};
-    
-    // Calcular y mostrar producción por minuto (Nivel * multiplicador)
-    set('factoriesLevel', b.factories || 0);
-    set('factoriesProduction', '+' + ((b.factories || 0) * 5));
-    
-    set('powerLevel', b.powerPlants || 0);
-    set('powerProduction', '+' + ((b.powerPlants || 0) * 2));
-    
-    set('farmsLevel', b.farms || 0);
-    set('farmsProduction', '+' + ((b.farms || 0) * 3));
-    
-    set('minesLevel', b.mines || 0);
-    set('minesProduction', '+' + ((b.mines || 0) * 2));
-    
-    set('refineriesLevel', b.refineries || 0);
-    set('refineriesProduction', '+' + ((b.refineries || 0) * 1.5));
-
-    // Servicios
-    set('hospitalsLevel', b.hospitals || 0);
-    set('policeLevel', b.police || 0);
-    set('firefightersLevel', b.firefighters || 0);
-    set('schoolsLevel', b.schools || 0);
-
-    // Ciudades List
+    // CITIES LIST
     const citiesList = document.getElementById('citiesList');
     if (citiesList) {
         citiesList.innerHTML = currentNation.ciudades.map((c, index) => `
-            <button class="city-item ${activeCityId === index ? 'active' : ''}" onclick="seleccionarCiudad(${index})" style="width: 100%; text-align: left; margin-bottom: 5px; padding: 10px; border: 1px solid #ccc; border-radius: 5px; background: ${activeCityId === index ? '#e0e0e0' : 'white'}; cursor: pointer;">
-                🏙️ ${c.name} (Pop: ${c.population})
+            <button class="city-item" onclick="seleccionarCiudad(${index})" style="width: 100%; text-align: left; margin-bottom: 10px; padding: 15px; border: 1px solid #ddd; border-radius: 8px; background: white; cursor: pointer; font-size: 1.1rem; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                🏙️ <strong>${c.name}</strong> <span style="float: right; color: #666;">Pop: ${c.population}</span>
             </button>
         `).join('') || (currentLanguage === 'es' ? "No hay ciudades" : "No cities");
     }
 
-    // Ejército
+    // CITY DETAIL VIEW
+    if (activeCityId !== null && currentNation.ciudades[activeCityId]) {
+        const city = currentNation.ciudades[activeCityId];
+        set('activeCityTitle', city.name);
+        const b = city.edificios || {};
+        
+        set('factoriesLevel', b.factories || 0);
+        set('factoriesProduction', '+' + ((b.factories || 0) * 5));
+        set('powerLevel', b.powerPlants || 0);
+        set('powerProduction', '+' + ((b.powerPlants || 0) * 2));
+        set('farmsLevel', b.farms || 0);
+        set('farmsProduction', '+' + ((b.farms || 0) * 3));
+        set('minesLevel', b.mines || 0);
+        set('minesProduction', '+' + ((b.mines || 0) * 2));
+        set('refineriesLevel', b.refineries || 0);
+        set('refineriesProduction', '+' + ((b.refineries || 0) * 1.5));
+
+        set('hospitalsLevel', b.hospitals || 0);
+        set('policeLevel', b.police || 0);
+        set('firefightersLevel', b.firefighters || 0);
+        set('schoolsLevel', b.schools || 0);
+    }
+
+    // WAR & RANKING
     if (currentNation.ejercito) {
         set('soldadosLevel', currentNation.ejercito.soldados);
         set('tanquesLevel', currentNation.ejercito.tanques);
@@ -426,11 +417,12 @@ function updateRankingDisplay() {
 
     let html = `<h3>${t.war} - Ranking</h3><div class="ranking-list">`;
     allNations.forEach((n, i) => {
+        // PARCHE DEFINITIVO: Mostrar Partido Político en el ranking
         html += `
             <div class="ranking-item" style="display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #eee;">
                 <div>
                     <span class="rank">#${i + 1}</span>
-                    <span class="nation-name"><strong>${n.nombre}</strong> — Fuerza: ${(n.poder_total || 0).toLocaleString()}</span>
+                    <span class="nation-name"><strong>${n.nombre}</strong> — Fuerza: ${(n.poder_total || 0).toLocaleString()} [${n.gobierno || 'S/D'}]</span>
                 </div>
                 ${n.id !== currentUser ? `<button onclick="attackNation('${n.id}')" style="padding: 5px 10px; cursor: pointer;">${t.attack}</button>` : ''}
             </div>`;
@@ -440,8 +432,17 @@ function updateRankingDisplay() {
 
 function switchTab(tabName) {
     document.querySelectorAll('.tab-content').forEach(tab => tab.classList.toggle('active', tab.id === tabName));
-    document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.toggle('active', btn.getAttribute('onclick').includes(tabName)));
+    document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.toggle('active', btn.getAttribute('onclick')?.includes(tabName)));
     if (tabName === 'overview' && map) setTimeout(() => map.invalidateSize(), 300);
+}
+
+// PARCHE DEFINITIVO: Sub-pestañas de ciudad
+function switchCitySubTab(sub) {
+    document.getElementById('cityInfra').classList.toggle('active', sub === 'infra');
+    document.getElementById('cityServ').classList.toggle('active', sub === 'serv');
+    document.querySelectorAll('.city-tab-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('onclick').includes(sub));
+    });
 }
 
 // ======================
@@ -449,8 +450,8 @@ function switchTab(tabName) {
 // ======================
 
 function initMap() {
-    if (!currentNation) return;
-    const mapContainer = document.getElementById('worldMap'); // ID correcto según HTML
+    if (!currentNation || typeof L === 'undefined') return;
+    const mapContainer = document.getElementById('worldMap');
     if (!mapContainer) return;
 
     if (map) {
@@ -495,8 +496,10 @@ window.handleRegister = handleRegister;
 window.handleLogout = handleLogout;
 window.recruitUnit = recruitUnit;
 window.upgradeBuilding = upgradeBuilding;
+window.demolishBuilding = demolishBuilding; // PARCHE DEFINITIVO
 window.upgradeService = upgradeService;
 window.buildCity = buildCity;
-window.seleccionarCiudad = seleccionarCiudad;
+window.seleccionarCiudad = seleccionarCiudad; // PARCHE DEFINITIVO
 window.changeLanguage = changeLanguage;
 window.switchTab = switchTab;
+window.switchCitySubTab = switchCitySubTab; // PARCHE DEFINITIVO
