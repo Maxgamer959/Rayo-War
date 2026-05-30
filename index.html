@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rayo War - Simulador de Naciones</title>
+    <!-- PARCHE DEFINITIVO: Leaflet Dependencies -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
@@ -106,6 +110,15 @@
 
     <!-- PANTALLA DEL JUEGO -->
     <div id="gameScreen" class="game-screen">
+        <!-- PARCHE DEFINITIVO: PANEL DE RECURSOS SUPERIOR -->
+        <header class="top-bar">
+            <div class="resource-item">💰 <span id="topMoney">0</span></div>
+            <div class="resource-item">👥 <span id="topPopulation">0</span></div>
+            <div class="resource-item">🟠 <span id="topCopper">0</span></div>
+            <div class="resource-item">⚪ <span id="topAluminum">0</span></div>
+            <div class="resource-item">🛢️ <span id="topOil">0</span></div>
+        </header>
+
         <div class="container">
             <!-- SIDEBAR -->
             <aside id="sidebar" class="sidebar">
@@ -121,8 +134,7 @@
 
                 <nav class="sidebar-nav">
                     <button class="nav-btn active" onclick="switchTab('overview')">📊 Resumen</button>
-                    <button class="nav-btn" onclick="switchTab('infrastructure')">🏗️ Infraestructura</button>
-                    <button class="nav-btn" onclick="switchTab('services')">🏥 Servicios</button>
+                    <!-- PARCHE DEFINITIVO: Ocultos del menú lateral -->
                     <button class="nav-btn" onclick="switchTab('cities')">🏙️ Ciudades</button>
                     <button class="nav-btn" onclick="switchTab('war')">⚔️ Guerra</button>
                 </nav>
@@ -173,86 +185,99 @@
                     </div>
                 </section>
 
-                <!-- TAB: INFRASTRUCTURE -->
-                <section id="infrastructure" class="tab-content">
-                    <h2>🏗️ Infraestructura</h2>
-                    <div class="infrastructure-grid">
-                        <div class="building-card">
-                            <h3>🏭 Fábricas</h3>
-                            <p class="building-level">Nivel: <strong id="factoriesLevel">0</strong></p>
-                            <p class="building-production">Producción: <strong id="factoriesProduction">+0</strong> dinero/min</p>
-                            <button onclick="upgradeBuilding('factories')">Mejorar (+$500)</button>
-                        </div>
-
-                        <div class="building-card">
-                            <h3>⚡ Plantas de Energía</h3>
-                            <p class="building-level">Nivel: <strong id="powerLevel">0</strong></p>
-                            <p class="building-production">Producción: <strong id="powerProduction">+0</strong> energía/min</p>
-                            <button onclick="upgradeBuilding('powerPlants')">Mejorar (+$600)</button>
-                        </div>
-
-                        <div class="building-card">
-                            <h3>🌾 Granjas</h3>
-                            <p class="building-level">Nivel: <strong id="farmsLevel">0</strong></p>
-                            <p class="building-production">Producción: <strong id="farmsProduction">+0</strong> alimentos/min</p>
-                            <button onclick="upgradeBuilding('farms')">Mejorar (+$400)</button>
-                        </div>
-
-                        <div class="building-card">
-                            <h3>⛏️ Minas</h3>
-                            <p class="building-level">Nivel: <strong id="minesLevel">0</strong></p>
-                            <p class="building-production">Producción: <strong id="minesProduction">+0</strong> minerales/min</p>
-                            <button onclick="upgradeBuilding('mines')">Mejorar (+$700)</button>
-                        </div>
-
-                        <div class="building-card">
-                            <h3>🛢️ Refinerías</h3>
-                            <p class="building-level">Nivel: <strong id="refineriesLevel">0</strong></p>
-                            <p class="building-production">Producción: <strong id="refineriesProduction">+0</strong> petróleo/min</p>
-                            <button onclick="upgradeBuilding('refineries')">Mejorar (+$800)</button>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- TAB: SERVICES -->
-                <section id="services" class="tab-content">
-                    <h2>🏥 Servicios Públicos</h2>
-                    <div class="services-grid">
-                        <div class="service-card">
-                            <h3>🏥 Hospitales</h3>
-                            <p class="service-level">Nivel: <strong id="hospitalsLevel">0</strong></p>
-                            <p class="service-effect">Efecto: +Salud</p>
-                            <button onclick="upgradeService('hospitals')">Construir (+$800)</button>
-                        </div>
-
-                        <div class="service-card">
-                            <h3>👮 Policía</h3>
-                            <p class="service-level">Nivel: <strong id="policeLevel">0</strong></p>
-                            <p class="service-effect">Efecto: +Seguridad</p>
-                            <button onclick="upgradeService('police')">Construir (+$600)</button>
-                        </div>
-
-                        <div class="service-card">
-                            <h3>🚒 Bomberos</h3>
-                            <p class="service-level">Nivel: <strong id="firefightersLevel">0</strong></p>
-                            <p class="service-effect">Efecto: +Seguridad</p>
-                            <button onclick="upgradeService('firefighters')">Construir (+$700)</button>
-                        </div>
-
-                        <div class="service-card">
-                            <h3>🎓 Escuelas</h3>
-                            <p class="service-level">Nivel: <strong id="schoolsLevel">0</strong></p>
-                            <p class="service-effect">Efecto: +Felicidad</p>
-                            <button onclick="upgradeService('schools')">Construir (+$500)</button>
-                        </div>
-                    </div>
-                </section>
-
                 <!-- TAB: CITIES -->
                 <section id="cities" class="tab-content">
                     <h2>🏙️ Ciudades</h2>
                     <button onclick="buildCity()" class="primary-btn">+ Construir Nueva Ciudad ($1000)</button>
                     <div id="citiesList" class="cities-list">-</div>
+                </section>
+
+                <!-- PARCHE DEFINITIVO: MENÚ DE CIUDAD A PANTALLA COMPLETA -->
+                <section id="cityDetail" class="tab-content city-detail-view">
+                    <div class="city-header">
+                        <button onclick="switchTab('cities')" class="btn-back">⬅ Volver</button>
+                        <h2 id="activeCityTitle">Nombre de la Ciudad</h2>
+                    </div>
+
+                    <div class="city-tabs">
+                        <button class="city-tab-btn active" onclick="switchCitySubTab('infra')">🏗️ Infraestructura</button>
+                        <button class="city-tab-btn" onclick="switchCitySubTab('serv')">🏥 Servicios</button>
+                    </div>
+
+                    <div id="cityInfra" class="city-subtab active">
+                        <div class="infrastructure-grid">
+                            <div class="building-card">
+                                <h3>🏭 Fábricas</h3>
+                                <p class="building-level">Nivel: <strong id="factoriesLevel">0</strong></p>
+                                <p class="building-production">Producción: <strong id="factoriesProduction">+0</strong> dinero/min</p>
+                                <div class="card-actions">
+                                    <button onclick="upgradeBuilding('factories')">Mejorar (+$500)</button>
+                                    <button onclick="demolishBuilding('factories')" class="btn-danger">🗑️ Demoler</button>
+                                </div>
+                            </div>
+                            <div class="building-card">
+                                <h3>⚡ Plantas de Energía</h3>
+                                <p class="building-level">Nivel: <strong id="powerLevel">0</strong></p>
+                                <p class="building-production">Producción: <strong id="powerProduction">+0</strong> energía/min</p>
+                                <div class="card-actions">
+                                    <button onclick="upgradeBuilding('powerPlants')">Mejorar (+$600)</button>
+                                    <button onclick="demolishBuilding('powerPlants')" class="btn-danger">🗑️ Demoler</button>
+                                </div>
+                            </div>
+                            <div class="building-card">
+                                <h3>🌾 Granjas</h3>
+                                <p class="building-level">Nivel: <strong id="farmsLevel">0</strong></p>
+                                <p class="building-production">Producción: <strong id="farmsProduction">+0</strong> alimentos/min</p>
+                                <div class="card-actions">
+                                    <button onclick="upgradeBuilding('farms')">Mejorar (+$400)</button>
+                                    <button onclick="demolishBuilding('farms')" class="btn-danger">🗑️ Demoler</button>
+                                </div>
+                            </div>
+                            <div class="building-card">
+                                <h3>⛏️ Minas</h3>
+                                <p class="building-level">Nivel: <strong id="minesLevel">0</strong></p>
+                                <p class="building-production">Producción: <strong id="minesProduction">+0</strong> minerales/min</p>
+                                <div class="card-actions">
+                                    <button onclick="upgradeBuilding('mines')">Mejorar (+$700)</button>
+                                    <button onclick="demolishBuilding('mines')" class="btn-danger">🗑️ Demoler</button>
+                                </div>
+                            </div>
+                            <div class="building-card">
+                                <h3>🛢️ Refinerías</h3>
+                                <p class="building-level">Nivel: <strong id="refineriesLevel">0</strong></p>
+                                <p class="building-production">Producción: <strong id="refineriesProduction">+0</strong> petróleo/min</p>
+                                <div class="card-actions">
+                                    <button onclick="upgradeBuilding('refineries')">Mejorar (+$800)</button>
+                                    <button onclick="demolishBuilding('refineries')" class="btn-danger">🗑️ Demoler</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="cityServ" class="city-subtab">
+                        <div class="services-grid">
+                            <div class="service-card">
+                                <h3>🏥 Hospitales</h3>
+                                <p class="service-level">Nivel: <strong id="hospitalsLevel">0</strong></p>
+                                <button onclick="upgradeService('hospitals')">Construir (+$800)</button>
+                            </div>
+                            <div class="service-card">
+                                <h3>👮 Policía</h3>
+                                <p class="service-level">Nivel: <strong id="policeLevel">0</strong></p>
+                                <button onclick="upgradeService('police')">Construir (+$600)</button>
+                            </div>
+                            <div class="service-card">
+                                <h3>🚒 Bomberos</h3>
+                                <p class="service-level">Nivel: <strong id="firefightersLevel">0</strong></p>
+                                <button onclick="upgradeService('firefighters')">Construir (+$700)</button>
+                            </div>
+                            <div class="service-card">
+                                <h3>🎓 Escuelas</h3>
+                                <p class="service-level">Nivel: <strong id="schoolsLevel">0</strong></p>
+                                <button onclick="upgradeService('schools')">Construir (+$500)</button>
+                            </div>
+                        </div>
+                    </div>
                 </section>
 
                 <!-- TAB: WAR -->
@@ -298,7 +323,6 @@
     <script type="module" src="firebase-config.js"></script>
     <script type="module" src="auth.js"></script>
     <script type="module" src="game.js"></script>
-
 
 </body>
 </html>
