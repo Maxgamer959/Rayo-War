@@ -552,3 +552,22 @@ window.seleccionarCiudad = seleccionarCiudad;
 window.changeLanguage = changeLanguage;
 window.switchTab = switchTab;
 window.switchCitySubTab = switchCitySubTab;
+
+// ======================
+// PARCHE: NAVEGACIÓN DE AUTENTICACIÓN (EXPOSICIÓN GLOBAL)
+// ======================
+
+function switchToRegister(e) {
+    if (e) e.preventDefault();
+    document.getElementById('loginForm').classList.remove('active');
+    document.getElementById('registerForm').classList.add('active');
+}
+
+function switchToLogin(e) {
+    if (e) e.preventDefault();
+    document.getElementById('registerForm').classList.remove('active');
+    document.getElementById('loginForm').classList.add('active');
+}
+
+window.switchToRegister = switchToRegister;
+window.switchToLogin = switchToLogin;
