@@ -1,5 +1,5 @@
 // ======================
-// RAYO WAR - SISTEMA DE NACIONES AVANZADO (PARCHE DEFINITIVO)
+// RAYO WAR - SISTEMA DE NACIONES AVANZADO (PARCHE DEFINITIVO V3)
 // ======================
 
 let currentNacion = null; 
@@ -18,6 +18,7 @@ import {
     getDocs,
     collection,
     updateDoc,
+    setDoc,
     addDoc,
     query,
     where,
@@ -91,14 +92,66 @@ async function handleRegister(e) {
     if (e) e.preventDefault();
     const email = document.getElementById('registerEmail').value;
     const password = document.getElementById('registerPassword').value;
-    const nationName = document.getElementById('nationName').value;
+    const nationName = document.getElementById('registerNationName').value; // ID Corregido
     const government = document.getElementById('governmentSelect').value;
     const territory = document.getElementById('territorySelect').value;
-    const result = await registerUser(email, password, nationName, government, territory);
+    
+    // 1. Registrar en Auth
+    const result = await registerUser(email, password);
+    
     if (result.success) {
         currentUser = result.uid;
-        await loadNationData();
-        showGameScreen();
+        
+        // 2. Inicializar documento en Firestore con valores base (Parche Crítico)
+        const initialData = {
+            nombre: nationName,
+            gobierno: government,
+            territorio: territory,
+            dinero: 5000, // Dinero inicial de regalo
+            poblacion: 1000,
+            felicidad: 50,
+            salud: 50,
+            seguridad: 50,
+            recursos_especiales: {
+                energy: 100,
+                food: 100,
+                minerals: 100,
+                oil: 100
+            },
+            ejercito: {
+                soldados: 10,
+                tanques: 0,
+                aviones: 0
+            },
+            poder_total: 100,
+            ciudades: [
+                {
+                    name: "Capital " + nationName,
+                    population: 500,
+                    edificios: {
+                        factories: 1,
+                        powerPlants: 1,
+                        farms: 1,
+                        mines: 1,
+                        refineries: 1,
+                        hospitals: 1,
+                        police: 1,
+                        firefighters: 1,
+                        schools: 1
+                    }
+                }
+            ],
+            ultima_conexion: serverTimestamp()
+        };
+
+        try {
+            await setDoc(doc(db, "naciones", currentUser), initialData);
+            await loadNationData();
+            showGameScreen();
+        } catch (error) {
+            console.error("Error creando nación en Firestore:", error);
+            alert("Error al inicializar la nación en la base de datos.");
+        }
     } else {
         const messageEl = document.getElementById('authMessage');
         if (messageEl) {
@@ -151,7 +204,6 @@ async function loadNationData() {
             await loadAllNations();
             updateUI();
             
-            // Cargar mapa solo si hay datos y Leaflet está listo
             if (typeof L !== 'undefined' && (currentNation.dinero > 0 || currentNation.ciudades.length > 0)) {
                 setTimeout(initMap, 800);
             }
@@ -183,6 +235,7 @@ function calculateMilitaryPower(nation) {
 }
 
 function calculatePassiveProduction() {
+    if (!currentNation.ultima_conexion) return;
     const lastConnection = currentNation.ultima_conexion.toDate ? currentNation.ultima_conexion.toDate() : new Date(currentNation.ultima_conexion);
     const minutes = (new Date() - lastConnection) / (1000 * 60);
     
@@ -256,7 +309,6 @@ async function upgradeBuilding(type) {
     } catch (e) { console.error(e); }
 }
 
-// PARCHE DEFINITIVO: Función de Demolición
 async function demolishBuilding(type) {
     if (activeCityId === null) return;
     if (!confirm(currentLanguage === 'es' ? "¿Estás seguro de demoler este edificio? El nivel volverá a 0." : "Are you sure? Level will reset to 0.")) return;
@@ -323,7 +375,6 @@ async function buildCity() {
     } catch (e) { console.error(e); }
 }
 
-// PARCHE DEFINITIVO: Seleccionar ciudad abre menú pantalla completa
 function seleccionarCiudad(id) {
     activeCityId = id;
     switchTab('cityDetail');
@@ -343,20 +394,20 @@ function updateUI() {
     const t = translations[currentLanguage];
     const set = (id, val) => { const el = document.getElementById(id); if (el) el.innerText = val; };
 
-    // PARCHE DEFINITIVO: PANEL SUPERIOR
+    // PANEL SUPERIOR
     set('topMoney', Math.floor(currentNation.dinero).toLocaleString());
     set('topPopulation', Math.floor(currentNation.poblacion || 0).toLocaleString());
     if (currentNation.recursos_especiales) {
         set('topCopper', Math.floor(currentNation.recursos_especiales.minerals || 0).toLocaleString());
-        set('topAluminum', Math.floor(currentNation.recursos_especiales.energy || 0).toLocaleString()); // Usando energía como aluminio para el ejemplo visual
+        set('topAluminum', Math.floor(currentNation.recursos_especiales.energy || 0).toLocaleString());
         set('topOil', Math.floor(currentNation.recursos_especiales.oil || 0).toLocaleString());
     }
 
     // SIDEBAR
     set('sidebarMoney', '$' + Math.floor(currentNation.dinero).toLocaleString());
     set('sidebarPopulation', Math.floor(currentNation.poblacion || 0).toLocaleString());
-    const nationNameEl = document.querySelector('#sidebar #nationName');
-    if (nationNameEl) nationNameEl.innerText = currentNation.nombre;
+    const sidebarNationEl = document.getElementById('sidebarNationName'); // ID Corregido
+    if (sidebarNationEl) sidebarNationEl.innerText = currentNation.nombre;
 
     // OVERVIEW
     set('overviewNation', currentNation.nombre);
@@ -417,7 +468,6 @@ function updateRankingDisplay() {
 
     let html = `<h3>${t.war} - Ranking</h3><div class="ranking-list">`;
     allNations.forEach((n, i) => {
-        // PARCHE DEFINITIVO: Mostrar Partido Político en el ranking
         html += `
             <div class="ranking-item" style="display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #eee;">
                 <div>
@@ -436,7 +486,6 @@ function switchTab(tabName) {
     if (tabName === 'overview' && map) setTimeout(() => map.invalidateSize(), 300);
 }
 
-// PARCHE DEFINITIVO: Sub-pestañas de ciudad
 function switchCitySubTab(sub) {
     document.getElementById('cityInfra').classList.toggle('active', sub === 'infra');
     document.getElementById('cityServ').classList.toggle('active', sub === 'serv');
@@ -492,14 +541,14 @@ setupAuthListener((state) => {
 });
 
 window.handleLogin = handleLogin;
-window.handleRegister = handleRegister;
+window.handleRegister = handleRegister; // EXPOSICIÓN GLOBAL
 window.handleLogout = handleLogout;
 window.recruitUnit = recruitUnit;
 window.upgradeBuilding = upgradeBuilding;
-window.demolishBuilding = demolishBuilding; // PARCHE DEFINITIVO
+window.demolishBuilding = demolishBuilding;
 window.upgradeService = upgradeService;
 window.buildCity = buildCity;
-window.seleccionarCiudad = seleccionarCiudad; // PARCHE DEFINITIVO
+window.seleccionarCiudad = seleccionarCiudad;
 window.changeLanguage = changeLanguage;
 window.switchTab = switchTab;
-window.switchCitySubTab = switchCitySubTab; // PARCHE DEFINITIVO
+window.switchCitySubTab = switchCitySubTab;
