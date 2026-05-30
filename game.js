@@ -323,8 +323,8 @@ function switchChatChannel(channel) {
     currentChatChannel = channel;
     const gTab = document.getElementById('chatGlobalTab');
     const aTab = document.getElementById('chatAllianceTab');
-    if (gTab) gTab.style.background = channel === 'global' ? '#fff' : '#eee';
-    if (aTab) aTab.style.background = channel === 'alliance' ? '#fff' : '#eee';
+    if (gTab) gTab.classList.toggle('active', channel === 'global');
+    if (aTab) aTab.classList.toggle('active', channel === 'alliance');
     startChatListener();
 }
 
@@ -337,7 +337,7 @@ function startChatListener() {
     } else {
         if (!currentNation.alianzaId) {
             const box = document.getElementById('chatMessages');
-            if (box) box.innerHTML = "<div style='padding:10px; color:#666;'>Debes unirte a una alianza para ver este chat.</div>";
+            if (box) box.innerHTML = "<div class='chat-notice'>Debes unirte a una alianza para ver este chat.</div>";
             return;
         }
         chatRef = query(collection(db, "chat_alianzas"), where("alianzaId", "==", currentNation.alianzaId), orderBy("fecha", "asc"), limit(50));
@@ -350,11 +350,8 @@ function startChatListener() {
         snap.forEach(doc => {
             const m = doc.data();
             const div = document.createElement('div');
-            div.style.padding = "5px 10px";
-            div.style.background = "#fff";
-            div.style.borderRadius = "4px";
-            div.style.fontSize = "0.9rem";
-            div.innerHTML = `<strong style="color:#2980b9;">${m.usuario}:</strong> ${m.mensaje}`;
+            div.className = 'chat-msg';
+            div.innerHTML = `<strong>${m.usuario}:</strong> ${m.mensaje}`;
             chatBox.appendChild(div);
         });
         chatBox.scrollTop = chatBox.scrollHeight;
