@@ -510,9 +510,25 @@ function updateUI() {
     if (activeCityId !== null && currentNation.ciudades[activeCityId]) {
         const city = currentNation.ciudades[activeCityId];
         set('activeCityTitle', city.name);
-        const b = city.edificios || {};
+        const b = city.edificios || { factories: 0, powerPlants: 0, farms: 0, mines: 0, refineries: 0, hospitals: 0, police: 0, firefighters: 0, schools: 0 };
+        
+        // Sincronizar niveles de Infraestructura
         set('factoriesLevel', b.factories || 0);
         set('factoriesProduction', "+" + Math.floor((b.factories || 0) * 5 * (currentNation.leyes?.industrialization ? 1.2 : 1)));
+        set('powerLevel', b.powerPlants || 0);
+        set('powerProduction', "+" + Math.floor((b.powerPlants || 0) * 2));
+        set('farmsLevel', b.farms || 0);
+        set('farmsProduction', "+" + Math.floor((b.farms || 0) * 3));
+        set('minesLevel', b.mines || 0);
+        set('minesProduction', "+" + Math.floor((b.mines || 0) * 2));
+        set('refineriesLevel', b.refineries || 0);
+        set('refineriesProduction', "+" + Math.floor((b.refineries || 0) * 1.5));
+
+        // Sincronizar niveles de Servicios
+        set('hospitalsLevel', b.hospitals || 0);
+        set('policeLevel', b.police || 0);
+        set('firefightersLevel', b.firefighters || 0);
+        set('schoolsLevel', b.schools || 0);
     }
 }
 
@@ -532,9 +548,15 @@ function switchTab(tabName) {
 }
 
 function switchCitySubTab(subTab) {
-    document.getElementById('cityInfra').classList.toggle('active', subTab === 'infra');
-    document.getElementById('cityServ').classList.toggle('active', subTab === 'serv');
-    document.querySelectorAll('.city-tab-btn').forEach(btn => btn.classList.toggle('active', btn.getAttribute('onclick').includes(subTab)));
+    const infra = document.getElementById('cityInfra');
+    const serv = document.getElementById('cityServ');
+    if (infra && serv) {
+        infra.classList.toggle('active', subTab === 'infra');
+        serv.classList.toggle('active', subTab === 'serv');
+    }
+    document.querySelectorAll('.city-tab-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('onclick').includes(subTab));
+    });
 }
 
 // ======================
