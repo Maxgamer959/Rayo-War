@@ -260,6 +260,7 @@ function startProductionLoop() {
     firestoreSyncCounter = 0;
 
     productionInterval = setInterval(() => {
+
         if (!currentNation || !currentUser) return;
 
         const TICK_SECONDS = 2;
@@ -288,7 +289,7 @@ function startProductionLoop() {
                 ultima_conexion:     serverTimestamp()
             }).catch(e => console.error("\u274c Error sync producción:", e));
         }
-    }, 2000); // tick cada 2 segundos
+    }, 200); // tick ultrarrápido (200ms) para contador visual
 }
 
 // Alias de compatibilidad (ya no se necesita calcular offset por tiempo ausente:
@@ -647,9 +648,14 @@ function updateUI() {
     // Unificar Poder Militar en Panel de Guerra
     const realPower = calculateMilitaryPower(currentNation);
     set('warTotalPower', realPower.toLocaleString());
-    set('armySoldiers', (currentNation.ejercito?.soldados || 0).toLocaleString());
-    set('armyTanks', (currentNation.ejercito?.tanques || 0).toLocaleString());
-    set('armyPlanes', (currentNation.ejercito?.aviones || 0).toLocaleString());
+    // Mostrar tropas con los valores reales actuales (evita quedarse congelado en 0)
+    const e = currentNation.ejercito || { soldados: 0, tanques: 0, aviones: 0 };
+    const soldados = Number(e.soldados ?? 0) || 0;
+    const tanques = Number(e.tanques ?? 0) || 0;
+    const aviones = Number(e.aviones ?? 0) || 0;
+    set('armySoldiers', soldados.toLocaleString());
+    set('armyTanks', tanques.toLocaleString());
+    set('armyPlanes', aviones.toLocaleString());
 
     const citiesList = document.getElementById('citiesList');
     if (citiesList) {
