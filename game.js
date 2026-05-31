@@ -405,29 +405,52 @@ async function sendChatMessage() {
 // ======================
 
 async function recruitUnit(unitType) {
-    let cost = { soldados: 50, tanques: 500, aviones: 2000 }[unitType];
-    if (currentNation.leyes?.forcedRecruitment) cost *= 0.85;
+    if (!currentUser || !currentNation) { alert("Sesión no iniciada. Recarga la página."); return; }
+
+    const baseCosts = { soldados: 50, tanques: 500, aviones: 2000 };
+    if (!(unitType in baseCosts)) { console.error("Tipo de unidad inválido:", unitType); return; }
+
+    let cost = baseCosts[unitType];
+    if (currentNation.leyes?.forcedRecruitment) cost = Math.floor(cost * 0.85);
 
     if (currentNation.dinero < cost) { alert(translations[currentLanguage].insufficientMoney); return; }
-    
-    const newEjercito = { ...currentNation.ejercito };
-    newEjercito[unitType] = (newEjercito[unitType] || 0) + 1;
+
+    // Actualización optimista local para que el panel responda de inmediato
+    const newEjercito = {
+        soldados: currentNation.ejercito?.soldados || 0,
+        tanques:  currentNation.ejercito?.tanques  || 0,
+        aviones:  currentNation.ejercito?.aviones  || 0
+    };
+    newEjercito[unitType] += 1;
+
     const newPower = (newEjercito.soldados * 10) + (newEjercito.tanques * 100) + (newEjercito.aviones * 500);
+    const newDinero = currentNation.dinero - cost;
+
+    // Parche UI instantáneo (el onSnapshot confirmará después)
+    currentNation.dinero = newDinero;
+    currentNation.ejercito = newEjercito;
+    currentNation.poder_total = newPower;
+    updateUI();
 
     try {
-        // ACTUALIZACIÓN ATÓMICA: Solo enviamos los campos que cambian
         await updateDoc(doc(db, "naciones", currentUser), {
-            dinero: currentNation.dinero - cost,
+            dinero: newDinero,
             ejercito: newEjercito,
             poder_total: newPower,
             ultima_conexion: serverTimestamp()
         });
-    } catch (e) { console.error("❌ Error reclutando:", e); }
+    } catch (e) {
+        console.error("❌ Error reclutando:", e);
+        alert("Error al reclutar. Revisa la consola.");
+    }
 }
 
 async function upgradeBuilding(type) {
-    if (activeCityId === null || !currentNation) return;
+    if (!currentUser || !currentNation) { alert("Sesión no iniciada. Recarga la página."); return; }
+    if (activeCityId === null) { alert(translations[currentLanguage].selectCity); return; }
+
     const costs = { factories: 500, powerPlants: 600, farms: 400, mines: 700, refineries: 800 };
+    if (!(type in costs)) { console.error("Tipo de edificio inválido:", type); return; }
     if (currentNation.dinero < costs[type]) { alert(translations[currentLanguage].insufficientMoney); return; }
 
     const newCities = JSON.parse(JSON.stringify(currentNation.ciudades)); // Deep copy
@@ -435,14 +458,23 @@ async function upgradeBuilding(type) {
     if (!city.edificios) city.edificios = { factories: 0, powerPlants: 0, farms: 0, mines: 0, refineries: 0, hospitals: 0, police: 0, firefighters: 0, schools: 0 };
     city.edificios[type] = (city.edificios[type] || 0) + 1;
 
+    const newDinero = currentNation.dinero - costs[type];
+
+    // Parche UI instantáneo
+    currentNation.dinero = newDinero;
+    currentNation.ciudades = newCities;
+    updateUI();
+
     try {
-        // ACTUALIZACIÓN ATÓMICA: No incluimos 'poblacion' para evitar sobreescrituras accidentales
         await updateDoc(doc(db, "naciones", currentUser), {
-            dinero: currentNation.dinero - costs[type],
+            dinero: newDinero,
             ciudades: newCities,
             ultima_conexion: serverTimestamp()
         });
-    } catch (e) { console.error("❌ Error mejorando edificio:", e); }
+    } catch (e) {
+        console.error("❌ Error mejorando edificio:", e);
+        alert("Error al mejorar. Revisa la consola.");
+    }
 }
 
 async function demolishBuilding(type) {
@@ -459,8 +491,11 @@ async function demolishBuilding(type) {
 }
 
 async function upgradeService(type) {
-    if (activeCityId === null || !currentNation) return;
+    if (!currentUser || !currentNation) { alert("Sesión no iniciada. Recarga la página."); return; }
+    if (activeCityId === null) { alert(translations[currentLanguage].selectCity); return; }
+
     const costs = { hospitals: 800, police: 600, firefighters: 700, schools: 500 };
+    if (!(type in costs)) { console.error("Tipo de servicio inválido:", type); return; }
     if (currentNation.dinero < costs[type]) { alert(translations[currentLanguage].insufficientMoney); return; }
 
     const newCities = JSON.parse(JSON.stringify(currentNation.ciudades)); // Deep copy
@@ -468,13 +503,23 @@ async function upgradeService(type) {
     if (!city.edificios) city.edificios = { factories: 0, powerPlants: 0, farms: 0, mines: 0, refineries: 0, hospitals: 0, police: 0, firefighters: 0, schools: 0 };
     city.edificios[type] = (city.edificios[type] || 0) + 1;
 
+    const newDinero = currentNation.dinero - costs[type];
+
+    // Parche UI instantáneo
+    currentNation.dinero = newDinero;
+    currentNation.ciudades = newCities;
+    updateUI();
+
     try {
-        await updateDoc(doc(db, "naciones", currentUser), { 
-            dinero: currentNation.dinero - costs[type], 
-            ciudades: newCities, 
-            ultima_conexion: serverTimestamp() 
+        await updateDoc(doc(db, "naciones", currentUser), {
+            dinero: newDinero,
+            ciudades: newCities,
+            ultima_conexion: serverTimestamp()
         });
-    } catch (e) { console.error("❌ Error mejorando servicio:", e); }
+    } catch (e) {
+        console.error("❌ Error mejorando servicio:", e);
+        alert("Error al mejorar. Revisa la consola.");
+    }
 }
 
 async function buildCity() {
