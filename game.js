@@ -173,9 +173,8 @@ async function loadNationData() {
                     currentNation.id = currentUser;
                     currentNacion = currentNation;
                     
-                    if (!currentNation.recursos_especiales) {
-                        currentNation.recursos_especiales = { energy: 100, food: 100, minerals: 100, oil: 100 };
-                    }
+                // Eliminada la sobreescritura local de recursos especiales.
+                // Los recursos se leen directamente de Firestore.
                     
                     // Solo calculamos producción pasiva una vez al cargar, no en cada snapshot
                     // para evitar bucles infinitos de actualización
@@ -214,8 +213,10 @@ async function loadAllNations() {
 }
 
 function calculateMilitaryPower(nation) {
-    if (!nation || !nation.ejercito) return 0;
-    return (nation.ejercito.soldados * 10) + (nation.ejercito.tanques * 100) + (nation.ejercito.aviones * 500);
+    if (!nation) return 0;
+    // Unificación de campos: Se lee de 'ejercito' (estructura estándar en Firestore)
+    const e = nation.ejercito || { soldados: 0, tanques: 0, aviones: 0 };
+    return (e.soldados * 10) + (e.tanques * 100) + (e.aviones * 500);
 }
 
 function calculatePassiveProduction() {
@@ -241,12 +242,23 @@ function calculatePassiveProduction() {
     let moneyMult = currentNation.leyes?.warTax ? 1.30 : 1.0;
     let popGrowth = currentNation.leyes?.warTax ? 0 : 1;
 
-    currentNation.dinero += ((totalFactories * 5 * factoryMult) * moneyMult) * minutes;
-    currentNation.poblacion += (totalFarms * 2 * popGrowth) * minutes;
-    currentNation.recursos_especiales.energy += (totalPower * 2) * minutes;
-    currentNation.recursos_especiales.food += (totalFarms * 3) * minutes;
-    currentNation.recursos_especiales.minerals += (totalMines * 2) * minutes;
-    currentNation.recursos_especiales.oil += (totalRefineries * 1.5) * minutes;
+    const newMoney = currentNation.dinero + (((totalFactories * 5 * factoryMult) * moneyMult) * minutes);
+    const newPop = currentNation.poblacion + ((totalFarms * 2 * popGrowth) * minutes);
+    const newRec = {
+        energy: (currentNation.recursos_especiales?.energy || 0) + (totalPower * 2 * minutes),
+        food: (currentNation.recursos_especiales?.food || 0) + (totalFarms * 3 * minutes),
+        minerals: (currentNation.recursos_especiales?.minerals || 0) + (totalMines * 2 * minutes),
+        oil: (currentNation.recursos_especiales?.oil || 0) + (totalRefineries * 1.5 * minutes)
+    };
+
+    // PARCHE: PERSISTENCIA EN FIRESTORE
+    // Actualizamos la base de datos para que el progreso sea real y el listener no rebote
+    updateDoc(doc(db, "naciones", currentUser), {
+        dinero: newMoney,
+        poblacion: newPop,
+        recursos_especiales: newRec,
+        ultima_conexion: serverTimestamp()
+    }).catch(e => console.error("❌ Error guardando producción pasiva:", e));
 }
 
 // ======================
