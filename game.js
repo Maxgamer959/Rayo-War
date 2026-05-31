@@ -162,54 +162,53 @@ async function loadNationData() {
     try {
         const nacionRef = doc(db, "naciones", currentUser);
         
-        // PARCHE: Listener en tiempo real para datos, leyes y alianzas
+        // Listener reactivo: cada cambio en Firestore pinta la UI sin guards
         onSnapshot(nacionRef, (nacionSnap) => {
-            if (nacionSnap.exists()) {
-                const data = nacionSnap.data();
-                
-                // Evitar rebote: Solo actualizar si los datos son realmente nuevos o si no hay datos locales
-                if (!currentNation || JSON.stringify(currentNation) !== JSON.stringify(data)) {
-                    currentNation = data;
-                    currentNation.id = currentUser;
-                    currentNacion = currentNation;
-                    
-                // Eliminada la sobreescritura local de recursos especiales.
-                // Los recursos se leen directamente de Firestore.
-                    
-                    // Solo calculamos producción pasiva una vez al cargar, no en cada snapshot
-                    // para evitar bucles infinitos de actualización
-                    if (!window.initialProductionCalculated) {
-                        calculatePassiveProduction();
-                        window.initialProductionCalculated = true;
-                    }
+            if (!nacionSnap.exists()) return;
+            const data = nacionSnap.data();
 
-                    updateUI();
-                    updateLawsUI();
-                    loadAllNations();
-                    
-                    if (currentChatChannel === 'alliance') startChatListener();
-                    
-                    if (typeof L !== 'undefined' && !map) {
-                        setTimeout(initMap, 800);
-                    }
+            const isFirstLoad = !currentNation;
+
+            currentNation = data;
+            currentNation.id = currentUser;
+            currentNacion = currentNation;
+
+            updateUI();
+            updateLawsUI();
+
+            // Arrancar sistemas una sola vez en el primer snapshot
+            if (isFirstLoad) {
+                calculatePassiveProduction(); // catch-up de tiempo offline
+                startProductionLoop();        // bucle en tiempo real
+                loadAllNations();             // listener global de ranking
+                startChatListener();
+                if (typeof L !== 'undefined' && !map) {
+                    setTimeout(initMap, 800);
                 }
             }
         });
     } catch (error) { console.error("❌ Error cargando datos:", error); }
 }
 
-async function loadAllNations() {
+// Referencia al unsubscribe del listener global de ranking
+let rankingUnsubscribe = null;
+
+function loadAllNations() {
+    // Evitar listeners duplicados
+    if (rankingUnsubscribe) return;
+
     try {
         const q = query(collection(db, "naciones"), orderBy("poder_total", "desc"), limit(20));
-        const querySnapshot = await getDocs(q);
-        allNations = [];
-        querySnapshot.forEach((doc) => {
-            const n = doc.data();
-            n.id = doc.id;
-            allNations.push(n);
-        });
-        updateRankingDisplay();
-    } catch (error) { console.error("❌ Error cargando ranking:", error); }
+        rankingUnsubscribe = onSnapshot(q, (snap) => {
+            allNations = [];
+            snap.forEach((docSnap) => {
+                const n = docSnap.data();
+                n.id = docSnap.id;
+                allNations.push(n);
+            });
+            updateRankingDisplay();
+        }, (error) => { console.error("\u274c Error en ranking en vivo:", error); });
+    } catch (error) { console.error("\u274c Error iniciando ranking:", error); }
 }
 
 function calculateMilitaryPower(nation) {
@@ -219,46 +218,108 @@ function calculateMilitaryPower(nation) {
     return (e.soldados * 10) + (e.tanques * 100) + (e.aviones * 500);
 }
 
-function calculatePassiveProduction() {
-    if (!currentNation.ultima_conexion) return;
-    const lastConnection = currentNation.ultima_conexion.toDate ? currentNation.ultima_conexion.toDate() : new Date(currentNation.ultima_conexion);
-    const minutes = (new Date() - lastConnection) / (1000 * 60);
-    
+// -------------------------------------------------------
+// PRODUCCIÓN PASIVA EN TIEMPO REAL
+// Tick cada 2 segundos: actualiza UI localmente al instante.
+// Persiste en Firestore cada 30 segundos para no saturar el Plan Spark.
+// -------------------------------------------------------
+let productionInterval = null;
+let firestoreSyncCounter = 0;
+const FIRESTORE_SYNC_EVERY = 15; // 15 ticks x 2s = sync cada 30s
+
+function getProductionRates() {
+    if (!currentNation || !currentNation.ciudades) return { money: 0, pop: 0, energy: 0, food: 0, minerals: 0, oil: 0 };
+
     let totalFactories = 0, totalPower = 0, totalFarms = 0, totalMines = 0, totalRefineries = 0;
-    
-    if (currentNation.ciudades && currentNation.ciudades.length > 0) {
-        currentNation.ciudades.forEach(city => {
-            const b = city.edificios || {};
-            totalFactories += (b.factories || 0);
-            totalPower += (b.powerPlants || 0);
-            totalFarms += (b.farms || 0);
-            totalMines += (b.mines || 0);
-            totalRefineries += (b.refineries || 0);
-        });
-    }
+    currentNation.ciudades.forEach(city => {
+        const b = city.edificios || {};
+        totalFactories  += (b.factories   || 0);
+        totalPower      += (b.powerPlants || 0);
+        totalFarms      += (b.farms       || 0);
+        totalMines      += (b.mines       || 0);
+        totalRefineries += (b.refineries  || 0);
+    });
 
-    // PARCHE: APLICAR BONOS DE LEYES MATEMÁTICOS
-    let factoryMult = currentNation.leyes?.industrialization ? 1.20 : 1.0;
-    let moneyMult = currentNation.leyes?.warTax ? 1.30 : 1.0;
-    let popGrowth = currentNation.leyes?.warTax ? 0 : 1;
+    const factoryMult = currentNation.leyes?.industrialization ? 1.20 : 1.0;
+    const moneyMult   = currentNation.leyes?.warTax ? 1.30 : 1.0;
+    const popGrowth   = currentNation.leyes?.warTax ? 0 : 1;
 
-    const newMoney = currentNation.dinero + (((totalFactories * 5 * factoryMult) * moneyMult) * minutes);
-    const newPop = currentNation.poblacion + ((totalFarms * 2 * popGrowth) * minutes);
-    const newRec = {
-        energy: (currentNation.recursos_especiales?.energy || 0) + (totalPower * 2 * minutes),
-        food: (currentNation.recursos_especiales?.food || 0) + (totalFarms * 3 * minutes),
-        minerals: (currentNation.recursos_especiales?.minerals || 0) + (totalMines * 2 * minutes),
-        oil: (currentNation.recursos_especiales?.oil || 0) + (totalRefineries * 1.5 * minutes)
+    // Tasas por SEGUNDO
+    return {
+        money:    (totalFactories * 5 * factoryMult * moneyMult) / 60,
+        pop:      (totalFarms * 2 * popGrowth) / 60,
+        energy:   (totalPower * 2) / 60,
+        food:     (totalFarms * 3) / 60,
+        minerals: (totalMines * 2) / 60,
+        oil:      (totalRefineries * 1.5) / 60
     };
+}
 
-    // PARCHE: PERSISTENCIA EN FIRESTORE
-    // Actualizamos la base de datos para que el progreso sea real y el listener no rebote
+function startProductionLoop() {
+    if (productionInterval) clearInterval(productionInterval);
+    firestoreSyncCounter = 0;
+
+    productionInterval = setInterval(() => {
+        if (!currentNation || !currentUser) return;
+
+        const TICK_SECONDS = 2;
+        const rates = getProductionRates();
+
+        // Actualizar estado local inmediatamente
+        currentNation.dinero += rates.money * TICK_SECONDS;
+        currentNation.poblacion += rates.pop * TICK_SECONDS;
+        if (!currentNation.recursos_especiales) currentNation.recursos_especiales = { energy: 0, food: 0, minerals: 0, oil: 0 };
+        currentNation.recursos_especiales.energy   += rates.energy   * TICK_SECONDS;
+        currentNation.recursos_especiales.food     += rates.food     * TICK_SECONDS;
+        currentNation.recursos_especiales.minerals += rates.minerals * TICK_SECONDS;
+        currentNation.recursos_especiales.oil      += rates.oil      * TICK_SECONDS;
+
+        // Pintar UI en pantalla en cada tick
+        updateUI();
+
+        // Persistir en Firestore solo cada FIRESTORE_SYNC_EVERY ticks (~30s)
+        firestoreSyncCounter++;
+        if (firestoreSyncCounter >= FIRESTORE_SYNC_EVERY) {
+            firestoreSyncCounter = 0;
+            updateDoc(doc(db, "naciones", currentUser), {
+                dinero:              currentNation.dinero,
+                poblacion:           currentNation.poblacion,
+                recursos_especiales: currentNation.recursos_especiales,
+                ultima_conexion:     serverTimestamp()
+            }).catch(e => console.error("\u274c Error sync producción:", e));
+        }
+    }, 2000); // tick cada 2 segundos
+}
+
+// Alias de compatibilidad (ya no se necesita calcular offset por tiempo ausente:
+// el bucle parte desde los valores actuales de Firestore)
+function calculatePassiveProduction() {
+    // Boot pasivo: ajustar recursos por tiempo offline al primer load
+    if (!currentNation || !currentNation.ultima_conexion) return;
+    const lastTs = currentNation.ultima_conexion.toDate
+        ? currentNation.ultima_conexion.toDate()
+        : new Date(currentNation.ultima_conexion);
+    const minutes = Math.max(0, (new Date() - lastTs) / (1000 * 60));
+    if (minutes < 0.1) return; // menos de 6 segundos, ignorar
+
+    const rates = getProductionRates();
+    const secs = minutes * 60;
+
+    currentNation.dinero += rates.money * secs;
+    currentNation.poblacion += rates.pop * secs;
+    if (!currentNation.recursos_especiales) currentNation.recursos_especiales = { energy: 0, food: 0, minerals: 0, oil: 0 };
+    currentNation.recursos_especiales.energy   += rates.energy   * secs;
+    currentNation.recursos_especiales.food     += rates.food     * secs;
+    currentNation.recursos_especiales.minerals += rates.minerals * secs;
+    currentNation.recursos_especiales.oil      += rates.oil      * secs;
+
+    // Persistir catch-up inmediatamente
     updateDoc(doc(db, "naciones", currentUser), {
-        dinero: newMoney,
-        poblacion: newPop,
-        recursos_especiales: newRec,
-        ultima_conexion: serverTimestamp()
-    }).catch(e => console.error("❌ Error guardando producción pasiva:", e));
+        dinero:              currentNation.dinero,
+        poblacion:           currentNation.poblacion,
+        recursos_especiales: currentNation.recursos_especiales,
+        ultima_conexion:     serverTimestamp()
+    }).catch(e => console.error("\u274c Error catch-up pasivo:", e));
 }
 
 // ======================
