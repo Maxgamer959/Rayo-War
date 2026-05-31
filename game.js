@@ -394,42 +394,43 @@ async function sendChatMessage() {
 
 async function recruitUnit(unitType) {
     let cost = { soldados: 50, tanques: 500, aviones: 2000 }[unitType];
-    // PARCHE: Bono de Ley de Reclutamiento
     if (currentNation.leyes?.forcedRecruitment) cost *= 0.85;
 
     if (currentNation.dinero < cost) { alert(translations[currentLanguage].insufficientMoney); return; }
     
     const newEjercito = { ...currentNation.ejercito };
-    newEjercito[unitType]++;
+    newEjercito[unitType] = (newEjercito[unitType] || 0) + 1;
     const newPower = (newEjercito.soldados * 10) + (newEjercito.tanques * 100) + (newEjercito.aviones * 500);
 
     try {
+        // ACTUALIZACIÓN ATÓMICA: Solo enviamos los campos que cambian
         await updateDoc(doc(db, "naciones", currentUser), {
             dinero: currentNation.dinero - cost,
             ejercito: newEjercito,
             poder_total: newPower,
             ultima_conexion: serverTimestamp()
         });
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error("❌ Error reclutando:", e); }
 }
 
 async function upgradeBuilding(type) {
-    if (activeCityId === null) return;
+    if (activeCityId === null || !currentNation) return;
     const costs = { factories: 500, powerPlants: 600, farms: 400, mines: 700, refineries: 800 };
     if (currentNation.dinero < costs[type]) { alert(translations[currentLanguage].insufficientMoney); return; }
 
-    const newCities = [...currentNation.ciudades];
+    const newCities = JSON.parse(JSON.stringify(currentNation.ciudades)); // Deep copy
     const city = newCities[activeCityId];
     if (!city.edificios) city.edificios = { factories: 0, powerPlants: 0, farms: 0, mines: 0, refineries: 0, hospitals: 0, police: 0, firefighters: 0, schools: 0 };
-    city.edificios[type]++;
+    city.edificios[type] = (city.edificios[type] || 0) + 1;
 
     try {
+        // ACTUALIZACIÓN ATÓMICA: No incluimos 'poblacion' para evitar sobreescrituras accidentales
         await updateDoc(doc(db, "naciones", currentUser), {
             dinero: currentNation.dinero - costs[type],
             ciudades: newCities,
             ultima_conexion: serverTimestamp()
         });
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error("❌ Error mejorando edificio:", e); }
 }
 
 async function demolishBuilding(type) {
@@ -446,18 +447,22 @@ async function demolishBuilding(type) {
 }
 
 async function upgradeService(type) {
-    if (activeCityId === null) return;
+    if (activeCityId === null || !currentNation) return;
     const costs = { hospitals: 800, police: 600, firefighters: 700, schools: 500 };
     if (currentNation.dinero < costs[type]) { alert(translations[currentLanguage].insufficientMoney); return; }
 
-    const newCities = [...currentNation.ciudades];
+    const newCities = JSON.parse(JSON.stringify(currentNation.ciudades)); // Deep copy
     const city = newCities[activeCityId];
     if (!city.edificios) city.edificios = { factories: 0, powerPlants: 0, farms: 0, mines: 0, refineries: 0, hospitals: 0, police: 0, firefighters: 0, schools: 0 };
-    city.edificios[type]++;
+    city.edificios[type] = (city.edificios[type] || 0) + 1;
 
     try {
-        await updateDoc(doc(db, "naciones", currentUser), { dinero: currentNation.dinero - costs[type], ciudades: newCities, ultima_conexion: serverTimestamp() });
-    } catch (e) { console.error(e); }
+        await updateDoc(doc(db, "naciones", currentUser), { 
+            dinero: currentNation.dinero - costs[type], 
+            ciudades: newCities, 
+            ultima_conexion: serverTimestamp() 
+        });
+    } catch (e) { console.error("❌ Error mejorando servicio:", e); }
 }
 
 async function buildCity() {
@@ -495,16 +500,21 @@ function updateUI() {
     if (!currentNation) return;
     const set = (id, val) => { const el = document.getElementById(id); if (el) el.innerText = val; };
 
-    set('topMoney', Math.floor(currentNation.dinero).toLocaleString());
-    set('topPopulation', Math.floor(currentNation.poblacion || 0).toLocaleString());
-    if (currentNation.recursos_especiales) {
-        set('topCopper', Math.floor(currentNation.recursos_especiales.minerals || 0).toLocaleString());
-        set('topAluminum', Math.floor(currentNation.recursos_especiales.energy || 0).toLocaleString());
-        set('topOil', Math.floor(currentNation.recursos_especiales.oil || 0).toLocaleString());
-    }
+    // Sincronización de Recursos Superiores (Barra Lateral y Top)
+    const dinero = Math.floor(currentNation.dinero || 0);
+    const poblacion = Math.floor(currentNation.poblacion || 0);
+    const energy = Math.floor(currentNation.recursos_especiales?.energy || 0);
+    const minerals = Math.floor(currentNation.recursos_especiales?.minerals || 0);
+    const oil = Math.floor(currentNation.recursos_especiales?.oil || 0);
 
-    set('sidebarMoney', '$' + Math.floor(currentNation.dinero).toLocaleString());
-    set('sidebarPopulation', Math.floor(currentNation.poblacion || 0).toLocaleString());
+    set('topMoney', dinero.toLocaleString());
+    set('topPopulation', poblacion.toLocaleString());
+    set('topCopper', minerals.toLocaleString());
+    set('topAluminum', energy.toLocaleString());
+    set('topOil', oil.toLocaleString());
+
+    set('sidebarMoney', '$' + dinero.toLocaleString());
+    set('sidebarPopulation', poblacion.toLocaleString());
     const sidebarNationEl = document.getElementById('sidebarNationName'); 
     if (sidebarNationEl) sidebarNationEl.innerText = currentNation.nombre;
 
@@ -512,9 +522,16 @@ function updateUI() {
     set('overviewAlliance', currentNation.alianza || "Ninguna");
     set('overviewTerritory', currentNation.territorio);
     set('overviewGovernment', currentNation.gobierno);
-    set('overviewPopulation', Math.floor(currentNation.poblacion || 0).toLocaleString());
-    set('overviewMoney', Math.floor(currentNation.dinero).toLocaleString());
+    set('overviewPopulation', poblacion.toLocaleString());
+    set('overviewMoney', dinero.toLocaleString());
     set('overviewHappiness', (currentNation.felicidad || 0) + "%");
+    
+    // Unificar Poder Militar en Panel de Guerra
+    const realPower = calculateMilitaryPower(currentNation);
+    set('warTotalPower', realPower.toLocaleString());
+    set('armySoldiers', (currentNation.ejercito?.soldados || 0).toLocaleString());
+    set('armyTanks', (currentNation.ejercito?.tanques || 0).toLocaleString());
+    set('armyPlanes', (currentNation.ejercito?.aviones || 0).toLocaleString());
 
     const citiesList = document.getElementById('citiesList');
     if (citiesList) {
