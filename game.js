@@ -165,23 +165,34 @@ async function loadNationData() {
         // PARCHE: Listener en tiempo real para datos, leyes y alianzas
         onSnapshot(nacionRef, (nacionSnap) => {
             if (nacionSnap.exists()) {
-                currentNation = nacionSnap.data();
-                currentNation.id = currentUser;
-                currentNacion = currentNation;
+                const data = nacionSnap.data();
                 
-                if (!currentNation.recursos_especiales) {
-                    currentNation.recursos_especiales = { energy: 100, food: 100, minerals: 100, oil: 100 };
-                }
-                
-                calculatePassiveProduction();
-                loadAllNations();
-                updateUI();
-                updateLawsUI();
-                
-                if (currentChatChannel === 'alliance') startChatListener();
-                
-                if (typeof L !== 'undefined' && !map) {
-                    setTimeout(initMap, 800);
+                // Evitar rebote: Solo actualizar si los datos son realmente nuevos o si no hay datos locales
+                if (!currentNation || JSON.stringify(currentNation) !== JSON.stringify(data)) {
+                    currentNation = data;
+                    currentNation.id = currentUser;
+                    currentNacion = currentNation;
+                    
+                    if (!currentNation.recursos_especiales) {
+                        currentNation.recursos_especiales = { energy: 100, food: 100, minerals: 100, oil: 100 };
+                    }
+                    
+                    // Solo calculamos producción pasiva una vez al cargar, no en cada snapshot
+                    // para evitar bucles infinitos de actualización
+                    if (!window.initialProductionCalculated) {
+                        calculatePassiveProduction();
+                        window.initialProductionCalculated = true;
+                    }
+
+                    updateUI();
+                    updateLawsUI();
+                    loadAllNations();
+                    
+                    if (currentChatChannel === 'alliance') startChatListener();
+                    
+                    if (typeof L !== 'undefined' && !map) {
+                        setTimeout(initMap, 800);
+                    }
                 }
             }
         });
