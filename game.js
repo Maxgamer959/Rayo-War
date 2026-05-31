@@ -465,7 +465,14 @@ async function buildCity() {
     } catch (e) { console.error(e); }
 }
 
-function seleccionarCiudad(id) { activeCityId = id; switchTab('cityDetail'); }
+function seleccionarCiudad(id) { 
+    activeCityId = id; 
+    const city = currentNation.ciudades[id];
+    const titleEl = document.getElementById('activeCityTitle');
+    if (titleEl && city) titleEl.innerText = city.name;
+    updateUI(); // Forzar actualización de niveles al seleccionar
+    switchTab('cityDetail'); 
+}
 
 // ======================
 // INTERFAZ Y TRADUCCIÓN
@@ -581,7 +588,12 @@ function initMap() {
     const center = coords[currentNation.territorio] || [20, 0];
     
     try {
-        map = L.map('worldMap').setView(center, 4);
+        map = L.map('worldMap', {
+            dragging: false, 
+            scrollWheelZoom: true, 
+            touchZoom: true,
+            doubleClickZoom: true
+        }).setView(center, 4);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
         L.marker(center).addTo(map).bindPopup(`<b>${currentNation.nombre}</b><br>${currentNation.territorio}`).openPopup();
         setTimeout(() => map.invalidateSize(), 200);
