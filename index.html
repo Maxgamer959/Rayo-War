@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rayo War - Simulador de Naciones</title>
+    <!-- PARCHE DEFINITIVO: Leaflet Dependencies -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png">
+    <style>
+        /* ESTILOS ADICIONALES PARA LAS NUEVAS SECCIONES (INYECTADOS QUIRÚRGICAMENTE) */
+        .chat-sidebar { width: 300px; background: #1a1c23; border-left: 1px solid #2d303e; display: flex; flex-direction: column; color: #fff; }
+        .chat-header { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid #2d303e; background: #1a1c23; }
+        .chat-tab { padding: 12px; border: none; cursor: pointer; background: #2d303e; color: #fff; font-weight: 600; transition: 0.3s; border-bottom: 2px solid transparent; }
+        .chat-tab:hover { background: #3f445b; }
+        .chat-tab.active { background: #1a1c23; color: #f39c12; border-bottom: 2px solid #f39c12; text-shadow: 0 0 10px rgba(243, 156, 18, 0.5); }
+        .chat-messages { flex-grow: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px; max-height: calc(100vh - 200px); background: #1a1c23; }
+        .chat-msg { padding: 10px 14px; background: #2d303e; color: #fff; border-radius: 8px; font-size: 0.9rem; border: 1px solid #3f445b; }
+        .chat-input-area { padding: 15px; border-top: 1px solid #2d303e; display: flex; gap: 8px; background: #1a1c23; }
+        .chat-input-area input { flex-grow: 1; padding: 10px; background: #2d303e; border: 1px solid #3f445b; border-radius: 6px; color: #fff; outline: none; }
+        .chat-input-area input::placeholder { color: #64748b; }
+        .chat-input-area button { padding: 10px 15px; background: #f39c12; color: white; border: none; border-radius: 6px; cursor: pointer; transition: 0.3s; font-weight: bold; }
+        .chat-input-area button:hover { background: #e67e22; box-shadow: 0 0 10px rgba(243, 156, 18, 0.3); }
+        .laws-grid, .alliance-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; padding: 20px; background: #1a1c23; }
+        .law-card, .alliance-card { background: #2d303e; color: #fff; padding: 25px; border-radius: 12px; border: 1px solid #3f445b; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        .law-card h3, .alliance-card h3 { color: #f39c12; margin-bottom: 10px; }
+        .law-card p, .alliance-card p { color: #bdc3c7; font-size: 0.95rem; line-height: 1.5; }
+        #chatMessages strong { color: #f39c12 !important; }
+        .chat-notice { color: #bdc3c7; font-style: italic; text-align: center; padding: 10px; }
+        
+        /* ESTILOS PESTAÑAS CIUDAD */
+        .city-tabs { display: flex; gap: 10px; margin-bottom: 20px; background: #1a1c23; padding: 10px; border-radius: 8px; }
+        .city-tab-btn { flex: 1; padding: 12px; border: 1px solid #3f445b; background: #2d303e; color: #fff; cursor: pointer; border-radius: 6px; font-weight: 600; transition: 0.3s; }
+        .city-tab-btn.active { background: #f39c12; border-color: #f39c12; color: #fff; box-shadow: 0 0 15px rgba(243, 156, 18, 0.2); }
+        .city-subtab { display: none; }
+        .city-subtab.active { display: block; }
+    </style>
+</head>
+<body>
+    <!-- PANTALLA DE AUTENTICACIÓN -->
+    <div id="authScreen" class="auth-screen">
+        <div class="auth-container">
+            <!-- LOGO Y TÍTULO -->
+            <div class="auth-header">
+                <h1 class="game-title">⚔️ RAYO WAR</h1>
+                <p class="game-subtitle">Simulador de Naciones Multijugador</p>
+            </div>
+
+            <!-- CONTENEDOR DE FORMULARIOS -->
+            <div class="auth-forms">
+                <!-- FORMULARIO DE LOGIN -->
+                <div id="loginForm" class="auth-form active">
+                    <h2>Iniciar Sesión</h2>
+                    <form onsubmit="handleLogin(event);">
+                        <div class="form-group">
+                            <label for="loginEmail">Correo Electrónico</label>
+                            <input type="email" id="loginEmail" placeholder="tu@correo.com" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="loginPassword">Contraseña</label>
+                            <input type="password" id="loginPassword" placeholder="••••••••" required>
+                        </div>
+                        <button type="submit" class="btn-primary">Entrar al Juego</button>
+                    </form>
+                    <div class="auth-footer">
+                        <p>¿No tienes cuenta? <a href="#" onclick="switchToRegister(event)">Regístrate aquí</a></p>
+                    </div>
+                </div>
+
+                <!-- FORMULARIO DE REGISTRO -->
+                <div id="registerForm" class="auth-form">
+                    <h2>Crear Nueva Nación</h2>
+                    <form onsubmit="handleRegister(event);">
+                        <div class="form-group">
+                            <label for="registerEmail">Correo Electrónico</label>
+                            <input type="email" id="registerEmail" placeholder="tu@correo.com" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="registerPassword">Contraseña</label>
+                            <input type="password" id="registerPassword" placeholder="Mínimo 6 caracteres" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="nationName">Nombre de tu Nación</label>
+                            <input type="text" id="registerNationName" placeholder="Ej: Rayonia" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="governmentSelect">Sistema de Gobierno</label>
+                            <select id="governmentSelect" required>
+                                <option value="">Selecciona un gobierno</option>
+                                <option value="Monarquía">👑 Monarquía</option>
+                                <option value="Democracia">🗳️ Democracia</option>
+                                <option value="Comunismo">☭ Comunismo</option>
+                                <option value="Fascismo">🔱 Fascismo</option>
+                                <option value="Teocracia">✝️ Teocracia</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="territorySelect">Territorio</label>
+                            <select id="territorySelect" required>
+                                <option value="">Selecciona un territorio</option>
+                                <option value="Chile">🇨🇱 Chile</option>
+                                <option value="Argentina">🇦🇷 Argentina</option>
+                                <option value="Perú">🇵🇪 Perú</option>
+                                <option value="Brasil">🇧🇷 Brasil</option>
+                                <option value="México">🇲🇽 México</option>
+                                <option value="Canadá">🇨🇦 Canadá</option>
+                                <option value="EE.UU">🇺🇸 EE.UU</option>
+                                <option value="Reino Unido">🇬🇧 Reino Unido</option>
+                                <option value="Francia">🇫🇷 Francia</option>
+                                <option value="Alemania">🇩🇪 Alemania</option>
+                                <option value="España">🇪🇸 España</option>
+                                <option value="Italia">🇮🇹 Italia</option>
+                                <option value="Rusia">🇷🇺 Rusia</option>
+                                <option value="China">🇨🇳 China</option>
+                                <option value="Japón">🇯🇵 Japón</option>
+                                <option value="India">🇮🇳 India</option>
+                                <option value="Australia">🇦🇺 Australia</option>
+                                <option value="Sudáfrica">🇿🇦 Sudáfrica</option>
+                                <option value="Egipto">🇪🇬 Egipto</option>
+                                <option value="Arabia Saudita">🇸🇦 Arabia Saudita</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn-primary">Crear Nación</button>
+                    </form>
+                    <div class="auth-footer">
+                        <p>¿Ya tienes cuenta? <a href="#" onclick="switchToLogin(event)">Inicia sesión aquí</a></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MENSAJE DE ERROR/ÉXITO -->
+            <div id="authMessage" class="auth-message"></div>
+        </div>
+    </div>
+
+    <!-- PANTALLA DEL JUEGO -->
+    <div id="gameScreen" class="game-screen">
+        <!-- PARCHE DEFINITIVO: PANEL DE RECURSOS SUPERIOR -->
+        <header class="top-bar">
+            <div class="top-bar-brand">⚔️ RAYO WAR</div>
+            <div class="top-bar-resources">
+                <div class="resource-item" title="Dinero"><span class="res-icon">💰</span> <span id="topMoney">0</span></div>
+                <div class="resource-item" title="Minerales"><span class="res-icon">⛏️</span> <span id="topMinerals">0</span></div>
+                <div class="resource-item" title="Energía"><span class="res-icon">⚡</span> <span id="topEnergy">0</span></div>
+                <div class="resource-item" title="Alimentos"><span class="res-icon">🌾</span> <span id="topFood">0</span></div>
+                <div class="resource-item" title="Petróleo"><span class="res-icon">🛢️</span> <span id="topOil">0</span></div>
+            </div>
+        </header>
+
+        <div class="container">
+            <!-- SIDEBAR -->
+            <aside id="sidebar" class="sidebar">
+                <div class="sidebar-header">
+                    <h3 id="sidebarNationName">Nación</h3>
+                    <button onclick="handleLogout()" class="btn-logout">Cerrar Sesión</button>
+                </div>
+
+                <div class="language-selector">
+                    <button class="lang-btn active" data-lang="es" onclick="changeLanguage('es')">🇪🇸 ES</button>
+                    <button class="lang-btn" data-lang="en" onclick="changeLanguage('en')">🇬🇧 EN</button>
+                </div>
+
+                <nav class="sidebar-nav">
+                    <button class="nav-btn active" onclick="switchTab('overview')">📊 Resumen</button>
+                    <button class="nav-btn" onclick="switchTab('cities')">🏙️ Ciudades</button>
+                    <button class="nav-btn" onclick="switchTab('laws')">📜 Leyes</button>
+                    <button class="nav-btn" onclick="switchTab('alliances')">🛡️ Alianzas</button>
+                    <button class="nav-btn" onclick="switchTab('war')">⚔️ Guerra</button>
+                </nav>
+
+                <div class="sidebar-stats">
+                    <div class="stat-item">
+                        <span>💰 Dinero</span>
+                        <strong id="sidebarMoney">$0</strong>
+                    </div>
+                    <div class="stat-item">
+                        <span>👥 Población</span>
+                        <strong id="sidebarPopulation">0</strong>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- CONTENIDO PRINCIPAL -->
+            <main id="mainContent" class="main-content">
+                <!-- TAB: OVERVIEW -->
+                <section id="overview" class="tab-content active">
+                    <h2>📊 Resumen de tu Nación</h2>
+                    
+                    <!-- CONTENEDOR DEL MAPA -->
+                    <div id="mapContainer" class="map-container">
+                        <div id="worldMap" class="world-map">
+                            <!-- Aquí se cargará el mapa -->
+                            <p>Cargando Mapa de Territorio...</p>
+                        </div>
+                    </div>
+
+                    <div class="info-grid">
+                        <div class="info-card">
+                            <h3>Información Nacional</h3>
+                            <p><strong>Nación:</strong> <span id="overviewNation">-</span></p>
+                            <p><strong>Alianza:</strong> <span id="overviewAlliance">Ninguna</span></p>
+                            <p><strong>Territorio:</strong> <span id="overviewTerritory">-</span></p>
+                            <p><strong>Gobierno:</strong> <span id="overviewGovernment">-</span></p>
+                            <div id="abundantResources"></div>
+                        </div>
+
+                        <div class="info-card">
+                            <h3>Estadísticas Nacionales</h3>
+                            <p><strong>Población:</strong> <span id="overviewPopulation">0</span></p>
+                            <p><strong>Dinero:</strong> $<span id="overviewMoney">0</span></p>
+                            <p><strong>Felicidad:</strong> <span id="overviewHappiness">0%</span></p>
+                            <p><strong>Salud:</strong> <span id="overviewHealth">0%</span></p>
+                            <p><strong>Seguridad:</strong> <span id="overviewSecurity">0%</span></p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- TAB: CITIES -->
+                <section id="cities" class="tab-content">
+                    <h2>🏙️ Ciudades</h2>
+                    <button onclick="buildCity()" class="primary-btn">+ Construir Nueva Ciudad ($1000)</button>
+                    <div id="citiesList" class="cities-list">-</div>
+                </section>
+
+                <!-- TAB: LAWS (INYECTADA) -->
+                <section id="laws" class="tab-content">
+                    <h2>📜 Leyes y Políticas</h2>
+                    <div class="laws-grid">
+                        <div class="law-card">
+                            <h3>🏭 Ley de Industrialización</h3>
+                            <p>Aumenta un 20% la producción de fábricas.</p>
+                            <p><strong>Costo: $1,000</strong></p>
+                            <button id="btnLawIndustrial" onclick="activateLaw('industrialization', 1000)" class="btn-primary" style="width: 100%; margin-top: 10px;">Activar</button>
+                        </div>
+                        <div class="law-card">
+                            <h3>🎖️ Reclutamiento Forzado</h3>
+                            <p>-15% costo de tropas, -10 felicidad.</p>
+                            <p><strong>Costo: $500</strong></p>
+                            <button id="btnLawRecruit" onclick="activateLaw('forcedRecruitment', 500)" class="btn-primary" style="width: 100%; margin-top: 10px;">Activar</button>
+                        </div>
+                        <div class="law-card">
+                            <h3>💰 Impuesto de Guerra</h3>
+                            <p>+30% dinero/min, población congelada.</p>
+                            <p><strong>Costo: $2,000</strong></p>
+                            <button id="btnLawWarTax" onclick="activateLaw('warTax', 2000)" class="btn-primary" style="width: 100%; margin-top: 10px;">Activar</button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- TAB: ALLIANCES (INYECTADA) -->
+                <section id="alliances" class="tab-content">
+                    <h2>🛡️ Alianzas Diplomáticas</h2>
+                    <div class="alliance-container">
+                        <div class="alliance-card">
+                            <h3>Fundar Alianza</h3>
+                            <p>Crea tu propia facción global.</p>
+                            <input type="text" id="newAllianceName" class="alliance-input" placeholder="Nombre de la Alianza">
+                            <button onclick="createAlliance()" class="btn-primary" style="width: 100%;">Fundar ($5,000)</button>
+                        </div>
+                        <div class="alliance-card">
+                            <h3>Unirse a Alianza</h3>
+                            <p>Escribe el nombre exacto de la alianza.</p>
+                            <input type="text" id="joinAllianceName" class="alliance-input" placeholder="Nombre de la Alianza">
+                            <button onclick="joinAlliance()" class="btn-secondary" style="width: 100%;">Unirse</button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- PARCHE DEFINITIVO: MENÚ DE CIUDAD A PANTALLA COMPLETA -->
+                <section id="cityDetail" class="tab-content city-detail-view">
+                    <div class="city-header">
+                        <button onclick="switchTab('cities')" class="btn-back">⬅ Volver</button>
+                        <h2 id="activeCityTitle">Nombre de la Ciudad</h2>
+                    </div>
+
+                    <div class="city-tabs">
+                        <button class="city-tab-btn active" onclick="switchCitySubTab('infra')">🏗️ Infraestructura</button>
+                        <button class="city-tab-btn" onclick="switchCitySubTab('serv')">🏥 Servicios</button>
+                    </div>
+
+                    <div id="cityInfra" class="city-subtab active">
+                        <div class="infrastructure-grid">
+                            <div class="building-card">
+                                <h3>🏭 Fábricas</h3>
+                                <p class="building-level">Nivel: <strong id="factoriesLevel">0</strong></p>
+                                <p class="building-production">Producción: <strong id="factoriesProduction">+0</strong> dinero/min</p>
+                                <div class="card-actions">
+                                    <button onclick="upgradeBuilding('factories')">Mejorar (+$500)</button>
+                                    <button onclick="demolishBuilding('factories')" class="btn-danger">🗑️ Demoler</button>
+                                </div>
+                            </div>
+                            <div class="building-card">
+                                <h3>⚡ Plantas de Energía</h3>
+                                <p class="building-level">Nivel: <strong id="powerLevel">0</strong></p>
+                                <p class="building-production">Producción: <strong id="powerProduction">+0</strong> energía/min</p>
+                                <div class="card-actions">
+                                    <button onclick="upgradeBuilding('powerPlants')">Mejorar (+$600)</button>
+                                    <button onclick="demolishBuilding('powerPlants')" class="btn-danger">🗑️ Demoler</button>
+                                </div>
+                            </div>
+                            <div class="building-card">
+                                <h3>🌾 Granjas</h3>
+                                <p class="building-level">Nivel: <strong id="farmsLevel">0</strong></p>
+                                <p class="building-production">Producción: <strong id="farmsProduction">+0</strong> alimentos/min</p>
+                                <div class="card-actions">
+                                    <button onclick="upgradeBuilding('farms')">Mejorar (+$400)</button>
+                                    <button onclick="demolishBuilding('farms')" class="btn-danger">🗑️ Demoler</button>
+                                </div>
+                            </div>
+                            <div class="building-card">
+                                <h3>⛏️ Minas</h3>
+                                <p class="building-level">Nivel: <strong id="minesLevel">0</strong></p>
+                                <p class="building-production">Producción: <strong id="minesProduction">+0</strong> minerales/min</p>
+                                <div class="card-actions">
+                                    <button onclick="upgradeBuilding('mines')">Mejorar (+$700)</button>
+                                    <button onclick="demolishBuilding('mines')" class="btn-danger">🗑️ Demoler</button>
+                                </div>
+                            </div>
+                            <div class="building-card">
+                                <h3>🛢️ Refinerías</h3>
+                                <p class="building-level">Nivel: <strong id="refineriesLevel">0</strong></p>
+                                <p class="building-production">Producción: <strong id="refineriesProduction">+0</strong> petróleo/min</p>
+                                <div class="card-actions">
+                                    <button onclick="upgradeBuilding('refineries')">Mejorar (+$800)</button>
+                                    <button onclick="demolishBuilding('refineries')" class="btn-danger">🗑️ Demoler</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="cityServ" class="city-subtab">
+                        <div class="services-grid">
+                            <div class="service-card">
+                                <h3>🏥 Hospitales</h3>
+                                <p class="service-level">Nivel: <strong id="hospitalsLevel">0</strong></p>
+                                <button onclick="upgradeService('hospitals')">Construir (+$800)</button>
+                            </div>
+                            <div class="service-card">
+                                <h3>👮 Policía</h3>
+                                <p class="service-level">Nivel: <strong id="policeLevel">0</strong></p>
+                                <button onclick="upgradeService('police')">Construir (+$600)</button>
+                            </div>
+                            <div class="service-card">
+                                <h3>🚒 Bomberos</h3>
+                                <p class="service-level">Nivel: <strong id="firefightersLevel">0</strong></p>
+                                <button onclick="upgradeService('firefighters')">Construir (+$700)</button>
+                            </div>
+                            <div class="service-card">
+                                <h3>🎓 Escuelas</h3>
+                                <p class="service-level">Nivel: <strong id="schoolsLevel">0</strong></p>
+                                <button onclick="upgradeService('schools')">Construir (+$500)</button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- TAB: WAR -->
+                <section id="war" class="tab-content">
+                    <h2>⚔️ Centro de Operaciones Militares</h2>
+                    <p class="section-desc">Recluta tropas, declara guerra y conquista recursos de otras naciones — estilo Supremacy 1914.</p>
+                    <div class="war-container">
+                        <div class="military-section">
+                            <h3>🎖️ Ejército Nacional</h3>
+                            <div class="military-grid">
+                                <div class="military-card">
+                                    <h4>👨‍🎖️ Soldados</h4>
+                                    <p class="unit-count">Cantidad: <strong id="soldadosLevel">0</strong></p>
+                                    <button onclick="recruitUnit('soldados')" class="btn-recruit">Reclutar (+$50)</button>
+                                </div>
+                                <div class="military-card">
+                                    <h4>🚜 Tanques</h4>
+                                    <p class="unit-count">Cantidad: <strong id="tanquesLevel">0</strong></p>
+                                    <button onclick="recruitUnit('tanques')" class="btn-recruit">Reclutar (+$500)</button>
+                                </div>
+                                <div class="military-card">
+                                    <h4>✈️ Aviones</h4>
+                                    <p class="unit-count">Cantidad: <strong id="avionesLevel">0</strong></p>
+                                    <button onclick="recruitUnit('aviones')" class="btn-recruit">Reclutar (+$2000)</button>
+                                </div>
+                            </div>
+                            <div class="military-power">
+                                <h4>⚡ Poder Militar: <strong id="militaryPowerDisplay">0</strong></h4>
+                                <p class="attack-cost">Costo por ataque: <strong id="attackCostDisplay">$500</strong></p>
+                            </div>
+                            <div class="war-tips">
+                                <p>💡 El defensor tiene +15% de bonificación. Necesitas mínimo 5 soldados para atacar.</p>
+                                <p>🏆 Victoria: robas 12% del dinero enemigo. Derrota: pierdes tropas.</p>
+                            </div>
+                        </div>
+
+                        <div class="ranking-section">
+                            <h3>🌍 Naciones del Mundo</h3>
+                            <p class="ranking-desc">Ataca desde el ranking para declarar guerra</p>
+                            <div id="rankingList" class="ranking-list">Cargando naciones...</div>
+                            <div id="attacksLog" class="attacks-log"></div>
+                        </div>
+                    </div>
+                </section>
+            </main>
+
+            <!-- CHAT MULTIJUGADOR (INYECTADO) -->
+            <aside class="chat-sidebar">
+                <div class="chat-header">
+                    <button class="chat-tab active" id="chatGlobalTab" onclick="switchChatChannel('global')">🌐 Global</button>
+                    <button class="chat-tab" id="chatAllianceTab" onclick="switchChatChannel('alliance')">🛡️ Alianza</button>
+                </div>
+                <div id="chatMessages" class="chat-messages"></div>
+                <div class="chat-input-area">
+                    <input type="text" id="chatInput" placeholder="Escribe un mensaje...">
+                    <button onclick="sendChatMessage()">▶</button>
+                </div>
+            </aside>
+        </div>
+    </div>
+
+    <!-- SCRIPTS -->
+    <script type="module" src="firebase-config.js"></script>
+    <script type="module" src="auth.js"></script>
+    <script type="module" src="game.js"></script>
+
+</body>
+</html>
