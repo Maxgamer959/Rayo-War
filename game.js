@@ -11,10 +11,36 @@ import {
     registerUser,
     loginUser,
     logoutUser,
-    setupAuthListener
+    setupAuthListener,
+    buildDefeatedNation,
+    recreateNation
 } from "./auth.js";
 import {
+    removeFromAlliance,
+    registerOnuMember,
+    sendTradeOffer,
+    acceptTradeOffer,
+    rejectTradeOffer,
+    sendSupport,
+    sabotageNation,
+    spyOnNation,
+    investSpaceProgram,
+    investNuclearProgram,
+    buildNuclearWeapon,
+    proposeOnuSanction,
+    voteOnuResolution,
+    appealOnuSanction,
+    startTradeListener,
+    stopTradeListener,
+    getSpaceBonus,
+    resourceLabel,
+    TRADE_RESOURCES,
+    SPACE_COSTS,
+    NUCLEAR_COSTS
+} from "./diplomacy.js";
+import {
     doc,
+    getDoc,
     getDocs,
     collection,
     updateDoc,
@@ -44,6 +70,8 @@ let battlesUnsubscribe = null;
 let productionInterval = null;
 let firestoreSyncCounter = 0;
 let statsSyncCounter = 0;
+let pendingTradeOffers = [];
+let onuUnsubscribe = null;
 
 const FIRESTORE_SYNC_EVERY = 15;
 const STATS_SYNC_EVERY = 30;
@@ -76,8 +104,11 @@ const translations = {
         insufficientMoney: '❌ Dinero insuficiente',
         cantAttackSelf: 'No puedes atacarte a ti mismo',
         cantAttackAlly: 'No puedes atacar a un miembro de tu alianza',
-        confirmAttack: '¿Declarar guerra y atacar a {name}? Costo: ${cost}',
-        noArmy: 'Necesitas al menos 5 soldados para atacar'
+        confirmAttack: '¿CONQUISTAR a {name}? Si ganas, lo eliminas del mapa. Si pierdes, tú caes. Costo: ${cost}',
+        confirmNuclear: '¿Usar ARMA NUCLEAR contra {name}? Conquista garantizada pero la ONU te sancionará.',
+        noArmy: 'Necesitas al menos 5 soldados para atacar',
+        conquered: '¡Territorio conquistado!',
+        defeated: 'Tu nación ha caído. Debes fundar una nueva.'
     },
     en: {
         overview: '📊 Overview',
@@ -95,8 +126,11 @@ const translations = {
         insufficientMoney: '❌ Insufficient money',
         cantAttackSelf: 'You cannot attack yourself',
         cantAttackAlly: 'You cannot attack an alliance member',
-        confirmAttack: 'Declare war and attack {name}? Cost: ${cost}',
-        noArmy: 'You need at least 5 soldiers to attack'
+        confirmAttack: 'CONQUER {name}? Win = they lose everything. Lose = you fall. Cost: ${cost}',
+        confirmNuclear: 'Use NUCLEAR WEAPON on {name}? Guaranteed conquest but UN will sanction you.',
+        noArmy: 'You need at least 5 soldiers to attack',
+        conquered: 'Territory conquered!',
+        defeated: 'Your nation has fallen. You must found a new one.'
     }
 };
 
@@ -188,8 +222,18 @@ async function loadNationData() {
         const nacionRef = doc(db, "naciones", currentUser);
 
         onSnapshot(nacionRef, (nacionSnap) => {
-            if (!nacionSnap.exists()) return;
+            if (!nacionSnap.exists()) {
+                showDefeatScreen("Tu nación ya no existe en el mapa.");
+                return;
+            }
+
             const data = nacionSnap.data();
+            if (data.estado === "derrotado") {
+                showDefeatScreen(data.derrota_razon || t("defeated"), data.derrota_por);
+                return;
+            }
+
+            hideDefeatScreen();
             const isFirstLoad = !currentNation;
 
             currentNation = data;
@@ -198,13 +242,20 @@ async function loadNationData() {
 
             updateUI();
             updateLawsUI();
+            updateDiplomacyUI();
 
             if (isFirstLoad) {
+                registerOnuMember(currentUser);
                 calculatePassiveProduction();
                 startProductionLoop();
                 loadAllNations();
                 loadBattlesLog();
                 startChatListener();
+                startTradeListener(currentUser, (offers) => {
+                    pendingTradeOffers = offers;
+                    renderTradeOffers();
+                });
+                loadOnuState();
                 if (typeof L !== 'undefined' && !map) {
                     setTimeout(initMap, 500);
                 }
@@ -212,6 +263,45 @@ async function loadNationData() {
         });
     } catch (error) {
         console.error("❌ Error cargando datos:", error);
+    }
+}
+
+function showDefeatScreen(reason, conqueror) {
+    if (productionInterval) clearInterval(productionInterval);
+    const overlay = document.getElementById("defeatOverlay");
+    if (!overlay) return;
+    overlay.style.display = "flex";
+    const reasonEl = document.getElementById("defeatReason");
+    if (reasonEl) {
+        reasonEl.textContent = conqueror
+            ? `${reason} Conquistado por: ${conqueror}.`
+            : reason;
+    }
+}
+
+function hideDefeatScreen() {
+    const overlay = document.getElementById("defeatOverlay");
+    if (overlay) overlay.style.display = "none";
+}
+
+async function handleRecreateNation(e) {
+    if (e) e.preventDefault();
+    const nationName = document.getElementById("recreateNationName")?.value.trim();
+    const government = document.getElementById("recreateGovernment")?.value;
+    const territory = document.getElementById("recreateTerritory")?.value;
+
+    if (!nationName || !government || !territory) {
+        alert("Completa todos los campos para fundar tu nueva nación.");
+        return;
+    }
+
+    const result = await recreateNation(currentUser, nationName, government, territory);
+    if (result.success) {
+        currentNation = null;
+        hideDefeatScreen();
+        alert("¡Nueva nación fundada! El imperio renace.");
+    } else {
+        alert(result.error);
     }
 }
 
@@ -224,6 +314,7 @@ function loadAllNations() {
             allNations = [];
             snap.forEach((docSnap) => {
                 const n = docSnap.data();
+                if (n.estado === "derrotado") return;
                 n.id = docSnap.id;
                 allNations.push(n);
             });
@@ -298,14 +389,17 @@ function getProductionRates() {
     const factoryMult = currentNation.leyes?.industrialization ? 1.20 : 1.0;
     const moneyMult = currentNation.leyes?.warTax ? 1.30 : 1.0;
     const popGrowth = currentNation.leyes?.warTax ? 0 : 1;
+    const spaceMult = getSpaceBonus(currentNation.programas?.espacial?.nivel || 0);
+    const sanctionMult = currentNation.sancion_onu ? 0.5 : 1.0;
+    const prodMult = spaceMult * sanctionMult;
 
     return {
-        money: (totalFactories * 5 * factoryMult * moneyMult) / 60,
-        pop: (totalFarms * 2 * popGrowth) / 60,
-        energy: (totalPower * 2) / 60,
-        food: (totalFarms * 3) / 60,
-        minerals: (totalMines * 2) / 60,
-        oil: (totalRefineries * 1.5) / 60
+        money: (totalFactories * 5 * factoryMult * moneyMult * prodMult) / 60,
+        pop: (totalFarms * 2 * popGrowth * prodMult) / 60,
+        energy: (totalPower * 2 * prodMult) / 60,
+        food: (totalFarms * 3 * prodMult) / 60,
+        minerals: (totalMines * 2 * prodMult) / 60,
+        oil: (totalRefineries * 1.5 * prodMult) / 60
     };
 }
 
@@ -401,7 +495,58 @@ function getAttackCost() {
     return ATTACK_BASE_COST + (army.soldados || 0) * 5 + (army.tanques || 0) * 20;
 }
 
-async function attackNation(targetId) {
+function absorbDefeatedNation(attacker, defender, attackCost) {
+    const attRes = attacker.recursos_especiales || {};
+    const defRes = defender.recursos_especiales || {};
+    const attArmy = attacker.ejercito || { soldados: 0, tanques: 0, aviones: 0 };
+    const defArmy = defender.ejercito || { soldados: 0, tanques: 0, aviones: 0 };
+    const attProg = attacker.programas || {};
+    const defProg = defender.programas || {};
+
+    const conqueredTerritories = [...new Set([
+        ...(attacker.territorios_conquistados || []),
+        defender.territorio,
+        ...(defender.territorios_conquistados || [])
+    ].filter(territory => territory && territory !== attacker.territorio))];
+
+    const mergedCities = [
+        ...(attacker.ciudades || []),
+        ...(defender.ciudades || []).map(city => ({
+            ...city,
+            name: `${city.name || "Ciudad"} (Conquistada)`
+        }))
+    ];
+
+    const merged = {
+        dinero: Math.max(0, (attacker.dinero || 0) - attackCost + (defender.dinero || 0)),
+        poblacion: (attacker.poblacion || 0) + (defender.poblacion || 0),
+        recursos_especiales: {
+            energy: (attRes.energy || 0) + (defRes.energy || 0),
+            food: (attRes.food || 0) + (defRes.food || 0),
+            minerals: (attRes.minerals || 0) + (defRes.minerals || 0),
+            oil: (attRes.oil || 0) + (defRes.oil || 0)
+        },
+        ejercito: {
+            soldados: (attArmy.soldados || 0) + Math.floor((defArmy.soldados || 0) * 0.6),
+            tanques: (attArmy.tanques || 0) + Math.floor((defArmy.tanques || 0) * 0.6),
+            aviones: (attArmy.aviones || 0) + Math.floor((defArmy.aviones || 0) * 0.6)
+        },
+        ciudades: mergedCities,
+        territorios_conquistados: conqueredTerritories,
+        leyes: { ...(defender.leyes || {}), ...(attacker.leyes || {}) },
+        programas: {
+            espacial: { nivel: Math.max(attProg.espacial?.nivel || 0, defProg.espacial?.nivel || 0) },
+            nuclear: {
+                nivel: Math.max(attProg.nuclear?.nivel || 0, defProg.nuclear?.nivel || 0),
+                armas: (attProg.nuclear?.armas || 0) + (defProg.nuclear?.armas || 0)
+            }
+        }
+    };
+    merged.poder_total = calculateMilitaryPower(merged);
+    return merged;
+}
+
+async function attackNation(targetId, useNuclear = false) {
     if (!currentUser || !currentNation) return;
     if (targetId === currentUser) {
         alert(t('cantAttackSelf'));
@@ -417,8 +562,14 @@ async function attackNation(targetId) {
     }
 
     const soldiers = currentNation.ejercito?.soldados || 0;
-    if (soldiers < 5) {
+    if (soldiers < 5 && !useNuclear) {
         alert(t('noArmy'));
+        return;
+    }
+
+    const nuclearArmas = currentNation.programas?.nuclear?.armas || 0;
+    if (useNuclear && nuclearArmas < 1) {
+        alert("No tienes armas nucleares.");
         return;
     }
 
@@ -428,7 +579,9 @@ async function attackNation(targetId) {
         return;
     }
 
-    const msg = t('confirmAttack', { name: target.nombre, cost: cost.toLocaleString() });
+    const msg = useNuclear
+        ? t('confirmNuclear', { name: target.nombre })
+        : t('confirmAttack', { name: target.nombre, cost: cost.toLocaleString() });
     if (!confirm(msg)) return;
 
     try {
@@ -445,6 +598,10 @@ async function attackNation(targetId) {
             const attacker = attackerSnap.data();
             const defender = defenderSnap.data();
 
+            if (attacker.estado === "derrotado" || defender.estado === "derrotado") {
+                throw new Error("DERROTADO");
+            }
+
             if (attacker.alianzaId && defender.alianzaId && attacker.alianzaId === defender.alianzaId) {
                 throw new Error("ALLY");
             }
@@ -452,90 +609,122 @@ async function attackNation(targetId) {
             const attackCost = ATTACK_BASE_COST + (attacker.ejercito?.soldados || 0) * 5 + (attacker.ejercito?.tanques || 0) * 20;
             if ((attacker.dinero || 0) < attackCost) throw new Error("NO_MONEY");
 
-            const attackPower = calculateMilitaryPower(attacker) * (0.85 + Math.random() * 0.3);
-            const defenseBonus = 1.15 + ((defender.seguridad || 50) / 200);
-            const defensePower = calculateMilitaryPower(defender) * defenseBonus * (0.85 + Math.random() * 0.3);
+            let attackPower, defensePower, victor, battleMessage, conquista = false;
+            let usedNuclear = false;
 
-            const attackerArmy = { ...attacker.ejercito };
-            const defenderArmy = { ...defender.ejercito };
-            let attackerMoney = (attacker.dinero || 0) - attackCost;
-            let defenderMoney = defender.dinero || 0;
-            let battleMessage = '';
-            let victor = null;
-
-            if (attackPower > defensePower) {
-                victor = 'attacker';
-                const loot = Math.floor(defenderMoney * 0.12);
-                attackerMoney += loot;
-                defenderMoney -= loot;
-
-                const defSoldierLoss = Math.max(1, Math.ceil((defenderArmy.soldados || 0) * 0.18));
-                const defTankLoss = Math.ceil((defenderArmy.tanques || 0) * 0.12);
-                const attSoldierLoss = Math.max(1, Math.ceil((attackerArmy.soldados || 0) * 0.08));
-
-                defenderArmy.soldados = Math.max(0, (defenderArmy.soldados || 0) - defSoldierLoss);
-                defenderArmy.tanques = Math.max(0, (defenderArmy.tanques || 0) - defTankLoss);
-                defenderArmy.aviones = Math.max(0, (defenderArmy.aviones || 0) - Math.ceil((defenderArmy.aviones || 0) * 0.05));
-                attackerArmy.soldados = Math.max(0, (attackerArmy.soldados || 0) - attSoldierLoss);
-
-                battleMessage = `${attacker.nombre} venció a ${defender.nombre}. Botín: $${loot.toLocaleString()}.`;
+            if (useNuclear && (attacker.programas?.nuclear?.armas || 0) > 0) {
+                attackPower = 999999;
+                defensePower = calculateMilitaryPower(defender);
+                victor = "attacker";
+                conquista = true;
+                usedNuclear = true;
+                battleMessage = `${attacker.nombre} conquistó ${defender.nombre} con un ataque nuclear.`;
             } else {
-                victor = 'defender';
-                const attSoldierLoss = Math.max(2, Math.ceil((attackerArmy.soldados || 0) * 0.22));
-                const attTankLoss = Math.ceil((attackerArmy.tanques || 0) * 0.10);
-                attackerArmy.soldados = Math.max(0, (attackerArmy.soldados || 0) - attSoldierLoss);
-                attackerArmy.tanques = Math.max(0, (attackerArmy.tanques || 0) - attTankLoss);
+                attackPower = calculateMilitaryPower(attacker) * (0.85 + Math.random() * 0.3);
+                const defenseBonus = 1.15 + ((defender.seguridad || 50) / 200);
+                defensePower = calculateMilitaryPower(defender) * defenseBonus * (0.85 + Math.random() * 0.3);
 
-                battleMessage = `${defender.nombre} repelió el ataque de ${attacker.nombre}.`;
+                if (attackPower > defensePower) {
+                    victor = "attacker";
+                    conquista = true;
+                    battleMessage = `${attacker.nombre} CONQUISTÓ ${defender.nombre}. El territorio cae.`;
+                } else {
+                    victor = "defender";
+                    battleMessage = `${defender.nombre} repelió a ${attacker.nombre}. El atacante pierde su nación.`;
+                }
             }
 
-            const attackerPower = calculateMilitaryPower({ ejercito: attackerArmy });
-            const defenderPower = calculateMilitaryPower({ ejercito: defenderArmy });
+            if (conquista) {
+                const merged = absorbDefeatedNation(attacker, defender, attackCost);
+                if (usedNuclear) {
+                    merged.programas.nuclear.armas = Math.max(0, (merged.programas.nuclear.armas || 0) - 1);
+                    merged.sancion_onu = true;
+                }
 
-            transaction.update(attackerRef, {
-                dinero: attackerMoney,
-                ejercito: attackerArmy,
-                poder_total: attackerPower,
-                ultima_conexion: serverTimestamp()
-            });
+                transaction.update(attackerRef, {
+                    ...merged,
+                    alianza: attacker.alianza,
+                    alianzaId: attacker.alianzaId,
+                    id_lider: currentUser,
+                    nombre: attacker.nombre,
+                    territorio: attacker.territorio,
+                    gobierno: attacker.gobierno,
+                    estado: "activo",
+                    felicidad: Math.min(100, (attacker.felicidad || 50) + 5),
+                    salud: attacker.salud,
+                    seguridad: attacker.seguridad,
+                    ultima_conexion: serverTimestamp()
+                });
 
-            transaction.update(defenderRef, {
-                dinero: defenderMoney,
-                ejercito: defenderArmy,
-                poder_total: defenderPower,
-                ultima_conexion: serverTimestamp()
-            });
+                transaction.set(defenderRef, buildDefeatedNation(
+                    targetId,
+                    defender,
+                    `Fuiste conquistado por ${attacker.nombre}.`,
+                    attacker.nombre
+                ));
+            } else {
+                transaction.set(attackerRef, buildDefeatedNation(
+                    currentUser,
+                    attacker,
+                    `Fuiste derrotado al atacar ${defender.nombre}.`,
+                    defender.nombre
+                ));
+            }
 
             return {
                 atacante: attacker.nombre,
                 atacanteId: currentUser,
                 defensor: defender.nombre,
                 defensorId: targetId,
-                resultado: victor === 'attacker' ? 'victoria' : 'derrota',
+                resultado: victor === "attacker" ? "victoria" : "derrota",
+                conquista,
+                nuclear: usedNuclear,
                 mensaje: battleMessage,
                 poderAtaque: Math.floor(attackPower),
-                poderDefensa: Math.floor(defensePower)
+                poderDefensa: Math.floor(defensePower),
+                perdedorId: conquista ? targetId : currentUser,
+                perdedorAlianzaId: conquista ? defender.alianzaId : attacker.alianzaId
             };
         });
 
         await addDoc(collection(db, "batallas"), {
             ...result,
+            tipo: result.nuclear ? "nuclear" : "conquista",
             fecha: serverTimestamp()
         });
 
+        if (result.perdedorAlianzaId) {
+            await removeFromAlliance(result.perdedorId, result.perdedorAlianzaId);
+        }
+
+        if (result.nuclear && result.atacanteId === currentUser) {
+            const onuRef = doc(db, "onu", "estado");
+            const onuSnap = await getDoc(onuRef);
+            const sanciones = onuSnap.exists() ? { ...(onuSnap.data().sanciones || {}) } : {};
+            sanciones[currentUser] = "Uso de armas nucleares";
+            if (onuSnap.exists()) {
+                await updateDoc(onuRef, { sanciones });
+            }
+        }
+
         if (result.atacanteId === currentUser) {
-            alert(result.resultado === 'victoria'
-                ? `⚔️ ¡Victoria! ${result.mensaje}`
-                : `💥 Derrota. ${result.mensaje}`);
+            if (result.conquista) {
+                alert(`👑 ${t('conquered')} ${result.mensaje}`);
+            } else {
+                alert(`💀 ${result.mensaje} ${t('defeated')}`);
+                showDefeatScreen(result.mensaje, result.defensor);
+            }
+        } else if (result.defensorId === currentUser && result.conquista) {
+            alert(`💀 ${result.mensaje} ${t('defeated')}`);
+            showDefeatScreen(result.mensaje, result.atacante);
         } else if (result.defensorId === currentUser) {
-            alert(result.resultado === 'victoria'
-                ? `🚨 ¡Te han atacado! ${result.mensaje}`
-                : `🛡️ ¡Defensa exitosa! ${result.mensaje}`);
+            alert(`🛡️ ${result.mensaje}`);
         }
 
     } catch (error) {
         if (error.message === 'ALLY') alert(t('cantAttackAlly'));
         else if (error.message === 'NO_MONEY') alert(t('insufficientMoney'));
+        else if (error.message === 'DERROTADO') alert("Una de las naciones ya está derrotada.");
         else console.error("❌ Error en batalla:", error);
     }
 }
@@ -924,6 +1113,10 @@ function updateUI() {
     set('overviewNation', currentNation.nombre);
     set('overviewAlliance', currentNation.alianza || "Ninguna");
     set('overviewTerritory', currentNation.territorio || '-');
+    const conquered = currentNation.territorios_conquistados || [];
+    if (conquered.length) {
+        set('overviewTerritory', `${currentNation.territorio} (+${conquered.length} conquistados)`);
+    }
     set('overviewGovernment', currentNation.gobierno || '-');
     set('overviewPopulation', poblacion.toLocaleString());
     set('overviewMoney', dinero.toLocaleString());
@@ -1027,7 +1220,10 @@ function updateRankingDisplay() {
                     <span class="military-power-stat">⚔️ ${(n.poder_total || 0).toLocaleString()}</span>
                     <span class="nation-money">💰 ${Math.floor(n.dinero || 0).toLocaleString()}</span>
                 </div>
-                ${!isMe && !isAlly ? `<button class="btn-attack" onclick="attackNation('${n.id}')">${t('attack')}</button>` : ''}
+                ${!isMe && !isAlly ? `
+                    <button class="btn-attack" onclick="attackNation('${n.id}')">${t('attack')}</button>
+                    ${(currentNation?.programas?.nuclear?.armas || 0) > 0 ? `<button class="btn-nuclear" onclick="attackNation('${n.id}', true)">☢️ Nuclear</button>` : ''}
+                ` : ''}
                 ${isAlly ? '<span class="ally-badge">🛡️ Aliado</span>' : ''}
             </div>`;
     }).join('');
@@ -1117,6 +1313,177 @@ function updateMapMarkers() {
 }
 
 // ======================
+// DIPLOMACIA UI
+// ======================
+
+function populateNationSelects() {
+    const selects = ["tradeTarget", "supportTarget", "sabotageTarget", "spyTarget", "onuTarget"];
+    selects.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.innerHTML = allNations
+            .filter(n => n.id !== currentUser)
+            .map(n => `<option value="${n.id}">${n.nombre} (${n.territorio || '?'})</option>`)
+            .join("");
+    });
+}
+
+function updateDiplomacyUI() {
+    if (!currentNation) return;
+    populateNationSelects();
+
+    const spaceLevel = currentNation.programas?.espacial?.nivel || 0;
+    const nuclearLevel = currentNation.programas?.nuclear?.nivel || 0;
+    const nuclearArmas = currentNation.programas?.nuclear?.armas || 0;
+
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    set("spaceLevel", spaceLevel);
+    set("nuclearLevel", nuclearLevel);
+    set("nuclearWeapons", nuclearArmas);
+    set("onuStatus", currentNation.sancion_onu ? "⚠️ SANCIONADO" : "✅ En regla");
+
+    const nextSpace = SPACE_COSTS[spaceLevel];
+    const nextNuclear = NUCLEAR_COSTS[nuclearLevel];
+    set("spaceCost", nextSpace ? `$${nextSpace.money} + ${nextSpace.minerals} minerales` : "MÁXIMO");
+    set("nuclearCost", nextNuclear ? `$${nextNuclear.money} + ${nextNuclear.minerals} min + ${nextNuclear.oil} petróleo` : "COMPLETADO");
+
+    const intel = currentNation.espionaje_intel;
+    const intelBox = document.getElementById("spyIntelBox");
+    if (intelBox) {
+        if (intel && intel.expira > Date.now()) {
+            intelBox.innerHTML = `
+                <h4>🕵️ Intel: ${intel.objetivoNombre}</h4>
+                <p>💰 $${Math.floor(intel.datos?.dinero || 0).toLocaleString()} | ⚔️ ${intel.datos?.poder_total || 0}</p>
+                <p>👨‍🎖️ ${intel.datos?.ejercito?.soldados || 0} soldados | ⛏️ ${Math.floor(intel.datos?.recursos?.minerals || 0)} minerales</p>
+                <p>☢️ Nuclear nv.${intel.datos?.programas?.nuclear?.nivel || 0} | 🚀 Espacial nv.${intel.datos?.programas?.espacial?.nivel || 0}</p>`;
+        } else {
+            intelBox.innerHTML = "<p class='resource-note'>Sin intel activa. Espía a una nación.</p>";
+        }
+    }
+
+    renderTradeOffers();
+}
+
+function renderTradeOffers() {
+    const box = document.getElementById("tradeOffersList");
+    if (!box) return;
+    if (!pendingTradeOffers.length) {
+        box.innerHTML = "<p class='resource-note'>No hay ofertas pendientes.</p>";
+        return;
+    }
+    box.innerHTML = pendingTradeOffers.map(o => `
+        <div class="diplo-item">
+            <p><strong>${o.emisorNombre}</strong> ofrece ${o.ofrece.cantidad} ${resourceLabel(o.ofrece.tipo)}</p>
+            <p>Pide: ${o.pide.cantidad} ${resourceLabel(o.pide.tipo)}</p>
+            <div class="diplo-actions">
+                <button onclick="handleAcceptTrade('${o.id}')">✅ Aceptar</button>
+                <button onclick="handleRejectTrade('${o.id}')" class="btn-danger">❌ Rechazar</button>
+            </div>
+        </div>
+    `).join("");
+}
+
+function loadOnuState() {
+    if (onuUnsubscribe) onuUnsubscribe();
+    onuUnsubscribe = onSnapshot(doc(db, "onu", "estado"), (snap) => {
+        const box = document.getElementById("onuResolutions");
+        if (!box) return;
+        if (!snap.exists()) {
+            box.innerHTML = "<p class='resource-note'>La ONU está formándose...</p>";
+            return;
+        }
+        const data = snap.data();
+        const resoluciones = data.resoluciones || [];
+        if (!resoluciones.length) {
+            box.innerHTML = "<p class='resource-note'>No hay resoluciones activas.</p>";
+            return;
+        }
+        box.innerHTML = resoluciones.slice(-5).reverse().map(r => `
+            <div class="diplo-item">
+                <p><strong>${r.tipo === 'sancion' ? '🚫 Sanción' : '📜 Resolución'}</strong></p>
+                <p>${r.razon}</p>
+                <p>Votos: ${(r.votos || []).length}/3</p>
+                ${!(r.votos || []).includes(currentUser) ? `<button onclick="handleVoteOnu('${r.id}')">🗳️ Votar a favor</button>` : '<span>Ya votaste</span>'}
+            </div>
+        `).join("");
+    });
+}
+
+async function handleSendTrade() {
+    const targetId = document.getElementById("tradeTarget")?.value;
+    const offerType = document.getElementById("tradeOfferType")?.value;
+    const offerAmount = parseInt(document.getElementById("tradeOfferAmount")?.value, 10);
+    const requestType = document.getElementById("tradeRequestType")?.value;
+    const requestAmount = parseInt(document.getElementById("tradeRequestAmount")?.value, 10);
+    const result = await sendTradeOffer(currentUser, currentNation, targetId, offerType, offerAmount, requestType, requestAmount);
+    alert(result.success ? "✅ Oferta enviada." : result.error);
+}
+
+async function handleAcceptTrade(tradeId) {
+    const result = await acceptTradeOffer(currentUser, tradeId);
+    alert(result.success ? "✅ Comercio completado." : result.error);
+}
+
+async function handleRejectTrade(tradeId) {
+    const result = await rejectTradeOffer(currentUser, tradeId);
+    if (!result.success) alert(result.error);
+}
+
+async function handleSendSupport() {
+    const targetId = document.getElementById("supportTarget")?.value;
+    const type = document.getElementById("supportType")?.value;
+    const amount = parseInt(document.getElementById("supportAmount")?.value, 10);
+    const result = await sendSupport(currentUser, currentNation, targetId, type, amount);
+    alert(result.success ? "✅ Apoyo enviado a tu aliado." : result.error);
+}
+
+async function handleSabotage() {
+    const targetId = document.getElementById("sabotageTarget")?.value;
+    if (!confirm("¿Ejecutar sabotaje? Costo: $2,000 + 30 minerales")) return;
+    const result = await sabotageNation(currentUser, currentNation, targetId);
+    alert(result.success ? "✅ Sabotaje ejecutado." : result.error);
+}
+
+async function handleSpy() {
+    const targetId = document.getElementById("spyTarget")?.value;
+    const result = await spyOnNation(currentUser, currentNation, targetId, allNations);
+    alert(result.success ? "✅ Intel obtenida." : result.error);
+    if (result.success) updateDiplomacyUI();
+}
+
+async function handleInvestSpace() {
+    const result = await investSpaceProgram(currentUser, currentNation);
+    alert(result.success ? `🚀 Programa espacial nivel ${result.newLevel}` : result.error);
+}
+
+async function handleInvestNuclear() {
+    const result = await investNuclearProgram(currentUser, currentNation);
+    alert(result.success ? `☢️ Programa nuclear nivel ${result.newLevel}` : result.error);
+}
+
+async function handleBuildNuke() {
+    const result = await buildNuclearWeapon(currentUser, currentNation);
+    alert(result.success ? "☢️ Arma nuclear construida." : result.error);
+}
+
+async function handleProposeSanction() {
+    const targetId = document.getElementById("onuTarget")?.value;
+    const reason = document.getElementById("onuReason")?.value.trim() || "Agresión internacional";
+    const result = await proposeOnuSanction(currentUser, currentNation, targetId, reason);
+    alert(result.success ? "📜 Resolución propuesta en la ONU." : result.error);
+}
+
+async function handleVoteOnu(resolutionId) {
+    const result = await voteOnuResolution(currentUser, resolutionId, true);
+    alert(result.success ? "🗳️ Voto registrado." : result.error);
+}
+
+async function handleAppealOnu() {
+    const result = await appealOnuSanction(currentUser, currentNation);
+    alert(result.success ? "✅ Sanción levantada." : result.error);
+}
+
+// ======================
 // INICIALIZACIÓN
 // ======================
 
@@ -1148,6 +1515,19 @@ window.joinAlliance = joinAlliance;
 window.switchChatChannel = switchChatChannel;
 window.sendChatMessage = sendChatMessage;
 window.attackNation = attackNation;
+window.handleRecreateNation = handleRecreateNation;
+window.handleSendTrade = handleSendTrade;
+window.handleAcceptTrade = handleAcceptTrade;
+window.handleRejectTrade = handleRejectTrade;
+window.handleSendSupport = handleSendSupport;
+window.handleSabotage = handleSabotage;
+window.handleSpy = handleSpy;
+window.handleInvestSpace = handleInvestSpace;
+window.handleInvestNuclear = handleInvestNuclear;
+window.handleBuildNuke = handleBuildNuke;
+window.handleProposeSanction = handleProposeSanction;
+window.handleVoteOnu = handleVoteOnu;
+window.handleAppealOnu = handleAppealOnu;
 
 window.switchToRegister = (e) => {
     if (e) e.preventDefault();

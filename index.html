@@ -38,6 +38,23 @@
         .city-tab-btn.active { background: #f39c12; border-color: #f39c12; color: #fff; box-shadow: 0 0 15px rgba(243, 156, 18, 0.2); }
         .city-subtab { display: none; }
         .city-subtab.active { display: block; }
+
+        /* DIPLOMACIA Y DERROTA */
+        .diplo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; padding: 20px; }
+        .diplo-card { background: #2d303e; color: #fff; padding: 20px; border-radius: 12px; border: 1px solid #3f445b; }
+        .diplo-card h3 { color: #f39c12; margin-bottom: 12px; }
+        .diplo-card select, .diplo-card input { width: 100%; padding: 8px; margin: 6px 0 12px; background: #1a1c23; border: 1px solid #3f445b; color: #fff; border-radius: 6px; }
+        .diplo-item { background: #1a1c23; padding: 12px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #3f445b; }
+        .diplo-actions { display: flex; gap: 8px; margin-top: 8px; }
+        .diplo-actions button { flex: 1; padding: 8px; border: none; border-radius: 6px; cursor: pointer; background: #27ae60; color: #fff; font-weight: 600; }
+        .btn-nuclear { background: #8e44ad !important; margin-top: 4px; width: 100%; padding: 6px; border: none; border-radius: 6px; color: #fff; cursor: pointer; font-size: 0.8rem; }
+        .btn-nuclear:hover { background: #6c3483 !important; }
+        .defeat-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.92); z-index: 9999; align-items: center; justify-content: center; }
+        .defeat-box { background: #1a1c23; border: 2px solid #e74c3c; border-radius: 16px; padding: 40px; max-width: 480px; width: 90%; color: #fff; text-align: center; }
+        .defeat-box h2 { color: #e74c3c; font-size: 2rem; margin-bottom: 10px; }
+        .defeat-box .form-group { text-align: left; margin: 12px 0; }
+        .defeat-box label { display: block; margin-bottom: 4px; color: #bdc3c7; }
+        .defeat-box input, .defeat-box select { width: 100%; padding: 10px; background: #2d303e; border: 1px solid #3f445b; color: #fff; border-radius: 6px; }
     </style>
 </head>
 <body>
@@ -169,6 +186,7 @@
                     <button class="nav-btn" onclick="switchTab('cities')">🏙️ Ciudades</button>
                     <button class="nav-btn" onclick="switchTab('laws')">📜 Leyes</button>
                     <button class="nav-btn" onclick="switchTab('alliances')">🛡️ Alianzas</button>
+                    <button class="nav-btn" onclick="switchTab('diplomacy')">🌐 Diplomacia</button>
                     <button class="nav-btn" onclick="switchTab('war')">⚔️ Guerra</button>
                 </nav>
 
@@ -266,6 +284,95 @@
                             <p>Escribe el nombre exacto de la alianza.</p>
                             <input type="text" id="joinAllianceName" class="alliance-input" placeholder="Nombre de la Alianza">
                             <button onclick="joinAlliance()" class="btn-secondary" style="width: 100%;">Unirse</button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- TAB: DIPLOMACIA -->
+                <section id="diplomacy" class="tab-content">
+                    <h2>🌐 Centro Diplomático</h2>
+                    <p class="section-desc">Comercia, espía, sabotea, desarrolla programas avanzados y participa en la ONU.</p>
+                    <div class="diplo-grid">
+                        <div class="diplo-card">
+                            <h3>🤝 Comercio Internacional</h3>
+                            <label>Nación destino</label>
+                            <select id="tradeTarget"></select>
+                            <label>Ofreces</label>
+                            <select id="tradeOfferType">
+                                <option value="dinero">💰 Dinero</option>
+                                <option value="energy">⚡ Energía</option>
+                                <option value="food">🌾 Alimentos</option>
+                                <option value="minerals">⛏️ Minerales</option>
+                                <option value="oil">🛢️ Petróleo</option>
+                                <option value="soldados">👨‍🎖️ Soldados</option>
+                                <option value="tanques">🚜 Tanques</option>
+                                <option value="aviones">✈️ Aviones</option>
+                            </select>
+                            <input type="number" id="tradeOfferAmount" placeholder="Cantidad" min="1">
+                            <label>Pides a cambio</label>
+                            <select id="tradeRequestType">
+                                <option value="minerals">⛏️ Minerales</option>
+                                <option value="dinero">💰 Dinero</option>
+                                <option value="energy">⚡ Energía</option>
+                                <option value="food">🌾 Alimentos</option>
+                                <option value="oil">🛢️ Petróleo</option>
+                                <option value="soldados">👨‍🎖️ Soldados</option>
+                                <option value="tanques">🚜 Tanques</option>
+                                <option value="aviones">✈️ Aviones</option>
+                            </select>
+                            <input type="number" id="tradeRequestAmount" placeholder="Cantidad" min="1">
+                            <button onclick="handleSendTrade()" class="btn-primary" style="width:100%">Enviar Oferta</button>
+                            <div id="tradeOffersList" style="margin-top:15px"></div>
+                        </div>
+
+                        <div class="diplo-card">
+                            <h3>🛡️ Apoyo a Aliados</h3>
+                            <p>Envía recursos o tropas a miembros de tu alianza.</p>
+                            <select id="supportTarget"></select>
+                            <select id="supportType">
+                                <option value="dinero">💰 Dinero</option>
+                                <option value="energy">⚡ Energía</option>
+                                <option value="food">🌾 Alimentos</option>
+                                <option value="minerals">⛏️ Minerales</option>
+                                <option value="oil">🛢️ Petróleo</option>
+                                <option value="soldados">👨‍🎖️ Soldados</option>
+                                <option value="tanques">🚜 Tanques</option>
+                                <option value="aviones">✈️ Aviones</option>
+                            </select>
+                            <input type="number" id="supportAmount" placeholder="Cantidad" min="1">
+                            <button onclick="handleSendSupport()" class="btn-primary" style="width:100%">Enviar Apoyo</button>
+                        </div>
+
+                        <div class="diplo-card">
+                            <h3>🕵️ Espionaje y Sabotaje</h3>
+                            <select id="spyTarget"></select>
+                            <button onclick="handleSpy()" class="btn-secondary" style="width:100%;margin-bottom:8px">Espionar ($1,500)</button>
+                            <select id="sabotageTarget"></select>
+                            <button onclick="handleSabotage()" class="btn-danger" style="width:100%">Sabotear ($2,000 + 30 min)</button>
+                            <div id="spyIntelBox" style="margin-top:12px"></div>
+                        </div>
+
+                        <div class="diplo-card">
+                            <h3>🚀 Programa Espacial</h3>
+                            <p>Nivel: <strong id="spaceLevel">0</strong> (+5% producción/nivel)</p>
+                            <p>Próximo: <span id="spaceCost">-</span></p>
+                            <button onclick="handleInvestSpace()" class="btn-primary" style="width:100%">Invertir</button>
+                            <hr style="border-color:#3f445b;margin:15px 0">
+                            <h3>☢️ Programa Nuclear</h3>
+                            <p>Nivel: <strong id="nuclearLevel">0</strong>/3 | Armas: <strong id="nuclearWeapons">0</strong></p>
+                            <p>Próximo: <span id="nuclearCost">-</span></p>
+                            <button onclick="handleInvestNuclear()" class="btn-primary" style="width:100%;margin-bottom:8px">Investigar</button>
+                            <button onclick="handleBuildNuke()" class="btn-nuclear" style="width:100%">Construir Bomba ($10k)</button>
+                        </div>
+
+                        <div class="diplo-card">
+                            <h3>🏛️ ONU — Naciones Unidas</h3>
+                            <p>Estado: <strong id="onuStatus">-</strong></p>
+                            <select id="onuTarget"></select>
+                            <input type="text" id="onuReason" placeholder="Motivo de la sanción">
+                            <button onclick="handleProposeSanction()" class="btn-secondary" style="width:100%;margin-bottom:8px">Proponer Sanción ($3,000)</button>
+                            <button onclick="handleAppealOnu()" class="btn-primary" style="width:100%;margin-bottom:12px">Apelar Sanción ($10,000)</button>
+                            <div id="onuResolutions"></div>
                         </div>
                     </div>
                 </section>
@@ -387,8 +494,9 @@
                                 <p class="attack-cost">Costo por ataque: <strong id="attackCostDisplay">$500</strong></p>
                             </div>
                             <div class="war-tips">
-                                <p>💡 El defensor tiene +15% de bonificación. Necesitas mínimo 5 soldados para atacar.</p>
-                                <p>🏆 Victoria: robas 12% del dinero enemigo. Derrota: pierdes tropas.</p>
+                                <p>💀 <strong>Conquista total:</strong> si ganas, absorbes TODO y el enemigo pierde la partida.</p>
+                                <p>💥 Si pierdes un ataque, tu nación cae y debes crear una nueva.</p>
+                                <p>☢️ Arma nuclear: conquista garantizada pero sanción ONU (-50% producción).</p>
                             </div>
                         </div>
 
@@ -414,6 +522,59 @@
                     <button onclick="sendChatMessage()">▶</button>
                 </div>
             </aside>
+        </div>
+    </div>
+
+    <!-- PANTALLA DE DERROTA — RECREAR NACIÓN -->
+    <div id="defeatOverlay" class="defeat-overlay">
+        <div class="defeat-box">
+            <h2>💀 NACIÓN CONQUISTADA</h2>
+            <p id="defeatReason">Tu imperio ha caído.</p>
+            <p style="color:#bdc3c7;margin:15px 0">Fundar una nueva nación para volver al juego:</p>
+            <form onsubmit="handleRecreateNation(event)">
+                <div class="form-group">
+                    <label>Nombre de la nueva nación</label>
+                    <input type="text" id="recreateNationName" placeholder="Ej: Nueva Rayonia" required>
+                </div>
+                <div class="form-group">
+                    <label>Gobierno</label>
+                    <select id="recreateGovernment" required>
+                        <option value="">Selecciona</option>
+                        <option value="Monarquía">👑 Monarquía</option>
+                        <option value="Democracia">🗳️ Democracia</option>
+                        <option value="Comunismo">☭ Comunismo</option>
+                        <option value="Fascismo">🔱 Fascismo</option>
+                        <option value="Teocracia">✝️ Teocracia</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Territorio</label>
+                    <select id="recreateTerritory" required>
+                        <option value="">Selecciona</option>
+                        <option value="Chile">🇨🇱 Chile</option>
+                        <option value="Argentina">🇦🇷 Argentina</option>
+                        <option value="Perú">🇵🇪 Perú</option>
+                        <option value="Brasil">🇧🇷 Brasil</option>
+                        <option value="México">🇲🇽 México</option>
+                        <option value="Canadá">🇨🇦 Canadá</option>
+                        <option value="EE.UU">🇺🇸 EE.UU</option>
+                        <option value="Reino Unido">🇬🇧 Reino Unido</option>
+                        <option value="Francia">🇫🇷 Francia</option>
+                        <option value="Alemania">🇩🇪 Alemania</option>
+                        <option value="España">🇪🇸 España</option>
+                        <option value="Italia">🇮🇹 Italia</option>
+                        <option value="Rusia">🇷🇺 Rusia</option>
+                        <option value="China">🇨🇳 China</option>
+                        <option value="Japón">🇯🇵 Japón</option>
+                        <option value="India">🇮🇳 India</option>
+                        <option value="Australia">🇦🇺 Australia</option>
+                        <option value="Sudáfrica">🇿🇦 Sudáfrica</option>
+                        <option value="Egipto">🇪🇬 Egipto</option>
+                        <option value="Arabia Saudita">🇸🇦 Arabia Saudita</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn-primary" style="width:100%;margin-top:10px">🏛️ Fundar Nueva Nación</button>
+            </form>
         </div>
     </div>
 

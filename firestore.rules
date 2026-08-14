@@ -59,5 +59,13 @@ service cloud.firestore {
     match /alianzas/{alianceId} {
       allow read, write: if isSignedIn();
     }
+
+    match /comercio/{tradeId} {
+      allow read, create, update: if isSignedIn();
+    }
+
+    match /onu/estado {
+      allow read, create, update: if isSignedIn();
+    }
   }
 }

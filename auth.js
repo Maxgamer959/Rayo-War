@@ -12,6 +12,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
 import {
     doc,
+    setDoc,
     increment,
     runTransaction,
     serverTimestamp
@@ -23,6 +24,7 @@ function buildInitialNation(uid, nationName, government, territory) {
         nombre: nationName,
         territorio: territory,
         gobierno: government,
+        estado: "activo",
         dinero: 5000,
         poblacion: 1000,
         felicidad: 50,
@@ -34,6 +36,14 @@ function buildInitialNation(uid, nationName, government, territory) {
         leyes: {},
         alianza: null,
         alianzaId: null,
+        territorios_conquistados: [],
+        programas: {
+            espacial: { nivel: 0 },
+            nuclear: { nivel: 0, armas: 0 }
+        },
+        miembro_onu: true,
+        sancion_onu: false,
+        espionaje_intel: null,
         ciudades: [{
             name: "Capital " + nationName,
             population: 500,
@@ -45,6 +55,47 @@ function buildInitialNation(uid, nationName, government, territory) {
         ultima_conexion: serverTimestamp(),
         fecha_creacion: serverTimestamp()
     };
+}
+
+function buildDefeatedNation(uid, previousData, reason, conquerorName) {
+    return {
+        id_lider: uid,
+        nombre: previousData?.nombre || "Nación Caída",
+        estado: "derrotado",
+        derrota_razon: reason,
+        derrota_por: conquerorName || null,
+        derrota_fecha: serverTimestamp(),
+        territorio: null,
+        gobierno: previousData?.gobierno || null,
+        dinero: 0,
+        poblacion: 0,
+        felicidad: 0,
+        salud: 0,
+        seguridad: 0,
+        recursos_especiales: { energy: 0, food: 0, minerals: 0, oil: 0 },
+        ejercito: { soldados: 0, tanques: 0, aviones: 0 },
+        poder_total: 0,
+        leyes: {},
+        alianza: null,
+        alianzaId: null,
+        territorios_conquistados: [],
+        programas: { espacial: { nivel: 0 }, nuclear: { nivel: 0, armas: 0 } },
+        miembro_onu: previousData?.miembro_onu !== false,
+        sancion_onu: false,
+        espionaje_intel: null,
+        ciudades: [],
+        ultima_conexion: serverTimestamp()
+    };
+}
+
+async function recreateNation(uid, nationName, government, territory) {
+    try {
+        await setDoc(doc(db, "naciones", uid), buildInitialNation(uid, nationName, government, territory));
+        return { success: true, uid };
+    } catch (error) {
+        console.error("❌ Error recreando nación:", error.message);
+        return { success: false, error: error.message };
+    }
 }
 
 async function registerUser(email, password, nationName, government, territory) {
@@ -120,7 +171,10 @@ function setupAuthListener(callback) {
 }
 
 export {
+    buildInitialNation,
+    buildDefeatedNation,
     registerUser,
+    recreateNation,
     loginUser,
     logoutUser,
     setupAuthListener
