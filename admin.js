@@ -35,12 +35,17 @@ async function ensureAdminRegistered(uid, email) {
     if (!uid || !email) return false;
     const config = await loadAdminConfig();
     const emailLower = email.toLowerCase();
+    const configEmailsLower = config.emails.map(e => e.toLowerCase());
 
-    if (config.emails.includes(emailLower) || config.uids.includes(uid)) {
+    if (configEmailsLower.includes(emailLower) || config.uids.includes(uid)) {
         if (!config.uids.includes(uid)) {
-            await updateDoc(doc(db, "configuracion", "admin"), {
-                uids: [...config.uids, uid]
-            });
+            try {
+                await setDoc(doc(db, "configuracion", "admin"), {
+                    uids: [...config.uids, uid]
+                }, { merge: true });
+            } catch (e) {
+                console.warn("⚠️ No se pudo registrar UID admin:", e.message);
+            }
         }
         isAdminUser = true;
         return true;

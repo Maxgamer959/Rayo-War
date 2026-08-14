@@ -21,16 +21,26 @@ import {
 
 async function isEmailBanned(email) {
     if (!email) return false;
-    const snap = await getDoc(doc(db, "configuracion", "baneados"));
-    if (!snap.exists()) return false;
-    const emails = (snap.data().emails || []).map(e => e.toLowerCase());
-    return emails.includes(email.toLowerCase());
+    try {
+        const snap = await getDoc(doc(db, "configuracion", "baneados"));
+        if (!snap.exists()) return false;
+        const emails = (snap.data().emails || []).map(e => e.toLowerCase());
+        return emails.includes(email.toLowerCase());
+    } catch (e) {
+        console.warn("⚠️ No se pudo verificar baneados por email:", e.message);
+        return false;
+    }
 }
 
 async function isUidBanned(uid) {
     if (!uid) return false;
-    const snap = await getDoc(doc(db, "baneados", uid));
-    return snap.exists();
+    try {
+        const snap = await getDoc(doc(db, "baneados", uid));
+        return snap.exists();
+    } catch (e) {
+        console.warn("⚠️ No se pudo verificar baneados por uid:", e.message);
+        return false;
+    }
 }
 
 async function checkAndKickBannedUser(uid, email) {
@@ -237,15 +247,20 @@ async function logoutUser() {
 
 function setupAuthListener(callback) {
     onAuthStateChanged(auth, async (user) => {
-        if (user) {
-            const banCheck = await checkAndKickBannedUser(user.uid, user.email);
-            if (banCheck.banned) {
-                callback({ authenticated: false, banned: true, message: banCheck.message });
-                return;
+        try {
+            if (user) {
+                const banCheck = await checkAndKickBannedUser(user.uid, user.email);
+                if (banCheck.banned) {
+                    callback({ authenticated: false, banned: true, message: banCheck.message });
+                    return;
+                }
+                callback({ authenticated: true, uid: user.uid, email: user.email });
+            } else {
+                callback({ authenticated: false });
             }
-            callback({ authenticated: true, uid: user.uid, email: user.email });
-        } else {
-            callback({ authenticated: false });
+        } catch (error) {
+            console.error("❌ Error en auth listener:", error.message);
+            callback({ authenticated: false, error: error.message });
         }
     });
 }

@@ -7,17 +7,31 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function adminData() {
-      return get(/databases/$(database)/documents/configuracion/admin).data;
+    function adminDoc() {
+      return get(/databases/$(database)/documents/configuracion/admin);
+    }
+
+    function adminEmails() {
+      return adminDoc().data.get('emails', []);
+    }
+
+    function adminUids() {
+      return adminDoc().data.get('uids', []);
     }
 
     function isAdmin() {
       return isSignedIn()
         && exists(/databases/$(database)/documents/configuracion/admin)
         && (
-          request.auth.uid in adminData().uids
-          || request.auth.token.email in adminData().emails
+          request.auth.uid in adminUids()
+          || request.auth.token.email in adminEmails()
         );
+    }
+
+    function canSetupAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/configuracion/admin)
+        && request.auth.token.email in adminEmails();
     }
 
     match /configuracion/estado {
@@ -26,7 +40,8 @@ service cloud.firestore {
 
     match /configuracion/admin {
       allow read: if isSignedIn();
-      allow create, update: if isAdmin();
+      allow create: if isSignedIn();
+      allow update: if isAdmin() || canSetupAdmin();
     }
 
     match /configuracion/baneados {
