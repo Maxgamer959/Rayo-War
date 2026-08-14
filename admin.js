@@ -2,7 +2,7 @@
 // ADMINISTRACIÓN Y MODERACIÓN
 // ======================
 
-import { db } from "./firebase-config.js";
+import { db, ADMIN_EMAILS } from "./firebase-config.js";
 import { buildDefeatedNation } from "./auth.js";
 import {
     doc,
@@ -22,32 +22,45 @@ let isAdminUser = false;
 let banWatchUnsubscribe = null;
 
 async function loadAdminConfig() {
-    const snap = await getDoc(doc(db, "configuracion", "admin"));
-    if (!snap.exists()) return { emails: [], uids: [] };
-    const data = snap.data();
-    return {
-        emails: (data.emails || []).map(e => e.toLowerCase()),
-        uids: data.uids || []
-    };
+    try {
+        const snap = await getDoc(doc(db, "configuracion", "admin"));
+        if (!snap.exists()) return { emails: [], uids: [] };
+        const data = snap.data();
+        return {
+            emails: (data.emails || []).map(e => String(e).toLowerCase()),
+            uids: data.uids || []
+        };
+    } catch (e) {
+        console.warn("⚠️ No se pudo leer configuracion/admin:", e.message);
+        return { emails: [], uids: [] };
+    }
 }
 
 async function ensureAdminRegistered(uid, email) {
     if (!uid || !email) return false;
+
     const config = await loadAdminConfig();
     const emailLower = email.toLowerCase();
-    const configEmailsLower = config.emails.map(e => e.toLowerCase());
+    const allAdminEmails = [
+        ...config.emails,
+        ...ADMIN_EMAILS.map(e => e.toLowerCase())
+    ];
+    const isListedAdmin = allAdminEmails.includes(emailLower) || config.uids.includes(uid);
 
-    if (configEmailsLower.includes(emailLower) || config.uids.includes(uid)) {
+    if (isListedAdmin) {
         if (!config.uids.includes(uid)) {
             try {
+                const mergedEmails = [...new Set([...config.emails, emailLower])];
                 await setDoc(doc(db, "configuracion", "admin"), {
+                    emails: mergedEmails,
                     uids: [...config.uids, uid]
                 }, { merge: true });
             } catch (e) {
-                console.warn("⚠️ No se pudo registrar UID admin:", e.message);
+                console.warn("⚠️ No se pudo registrar UID admin en Firestore:", e.message);
             }
         }
         isAdminUser = true;
+        console.log("👑 Admin activo:", emailLower);
         return true;
     }
 

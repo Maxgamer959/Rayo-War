@@ -25,4 +25,9 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 
+// Correos con acceso admin (respaldo si Firestore falla)
+export const ADMIN_EMAILS = [
+    "pulguitak976890@gmail.com"
+];
+
 console.log("✅ Firebase inicializado correctamente con Rayo War");

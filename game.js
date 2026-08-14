@@ -232,15 +232,21 @@ function acceptRulesFromModal() {
 }
 
 async function initAdminSession(uid, email) {
-    await ensureAdminRegistered(uid, email || auth.currentUser?.email);
-    const adminBtn = document.getElementById("adminNavBtn");
-    if (adminBtn) adminBtn.style.display = getIsAdmin() ? "block" : "none";
+    const userEmail = email || auth.currentUser?.email || "";
+    await ensureAdminRegistered(uid, userEmail);
+    updateAdminNav();
 
     startBanWatcher(uid, async (banData) => {
         alert(`⛔ Has sido suspendido permanentemente.\nMotivo: ${banData.razon || "Violación de reglas"}`);
         await logoutUser();
         location.reload();
     });
+}
+
+function updateAdminNav() {
+    const adminBtn = document.getElementById("adminNavBtn");
+    if (!adminBtn) return;
+    adminBtn.classList.toggle("admin-visible", getIsAdmin());
 }
 
 function showAuthMessage(message, type) {
@@ -304,6 +310,7 @@ async function loadNationData() {
             updateDiplomacyUI();
 
             if (isFirstLoad) {
+                updateAdminNav();
                 registerOnuMember(currentUser);
                 calculatePassiveProduction();
                 startProductionLoop();
