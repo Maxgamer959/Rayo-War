@@ -268,6 +268,9 @@ async function loadNationData() {
 
 function showDefeatScreen(reason, conqueror) {
     if (productionInterval) clearInterval(productionInterval);
+    productionInterval = null;
+    currentNation = null;
+    currentNacion = null;
     const overlay = document.getElementById("defeatOverlay");
     if (!overlay) return;
     overlay.style.display = "flex";
@@ -297,8 +300,6 @@ async function handleRecreateNation(e) {
 
     const result = await recreateNation(currentUser, nationName, government, territory);
     if (result.success) {
-        currentNation = null;
-        hideDefeatScreen();
         alert("¡Nueva nación fundada! El imperio renace.");
     } else {
         alert(result.error);

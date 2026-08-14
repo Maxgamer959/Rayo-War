@@ -12,7 +12,6 @@ import {
     updateDoc,
     query,
     where,
-    orderBy,
     limit,
     serverTimestamp,
     onSnapshot,
