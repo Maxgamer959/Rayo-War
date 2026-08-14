@@ -1,0 +1,2347 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rayo War - Guerra Mundial</title>
+<style>
+  :root {
+    --azul: #004080;
+    --borde: #004080;
+    --bg: #f0f2f5;
+    --card: #fff;
+    --robot: #b91c1c;
+    --ok: #198754;
+    --warn: #c2272d;
+    --sec: #0a6efd;
+    --graph-line: #0a6efd;
+    --graph-bg: #f0f8ff;
+    --map-bg: #cce5ff;
+    --map-border: #004080;
+    --espia: #2f4f4f;
+  }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--bg);
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    color: #333;
+    animation: fadeIn 1s ease-in-out;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  
+  h1 {
+    margin: 1rem 0;
+    color: var(--azul);
+    animation: slideInDown 0.8s ease-out;
+  }
+
+  @keyframes slideInDown {
+    from { transform: translateY(-50px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+
+  #leafletPanel {
+    width: 1200px;
+    max-width: 95%;
+    height: 760px;
+    margin: 10px;
+    padding: 16px;
+  }
+
+  #mapaOSM {
+    width: 100%;
+    min-height: 660px;
+    border-radius: 12px;
+    background: #f8f9fa;
+    border: 2px solid var(--map-border);
+  }
+
+  .panel {
+    max-width: 1200px;
+    width: 95%;
+    margin: 10px;
+    padding: 1rem;
+    background: var(--card);
+    border-radius: 12px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+    transition: transform 0.3s ease-in-out;
+  }
+  .panel:hover {
+    transform: translateY(-2px);
+  }
+
+  .row {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .col {
+    flex: 1;
+    min-width: 300px;
+    padding: 1rem;
+    border-radius: 10px;
+    background-color: #f8f8f8;
+  }
+  
+  .btn {
+    margin: 6px 4px;
+    padding: 10px 14px;
+    border: none;
+    border-radius: 8px;
+    background: var(--azul);
+    color: #fff;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    font-weight: bold;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  }
+  .btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  }
+  .btn.sec { background: var(--sec); }
+  .btn.ok { background: var(--ok); }
+  .btn.warn { background: var(--warn); }
+  .btn.espia { background: var(--espia); }
+  
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+    table-layout: fixed;
+  }
+  
+  .table-responsive {
+    overflow-x: auto;
+  }
+
+  th, td {
+    border: 1px solid var(--borde);
+    padding: 8px;
+    text-align: center;
+    word-wrap: break-word;
+  }
+  
+  th:nth-child(1), td:nth-child(1) { width: 25%; }
+  th:nth-child(2), td:nth-child(2) { width: 12%; }
+  th:nth-child(3), td:nth-child(3) { width: 12%; }
+  th:nth-child(4), td:nth-child(4) { width: 12%; }
+  th:nth-child(5), td:nth-child(5) { width: 12%; }
+  th:nth-child(6), td:nth-child(6) { width: 12%; }
+  th:nth-child(7), td:nth-child(7) { width: 15%; }
+
+
+  #seleccionPais {
+    margin: 20px;
+    padding: 20px;
+    background: var(--card);
+    border-radius: 12px;
+    box-shadow: 0 2px 10px rgba(0,0,0,.15);
+    text-align: center;
+    transition: all 0.5s ease-in-out;
+  }
+  
+  #infoPais {
+    margin-top: 8px;
+    padding: 8px;
+    border: 1px solid var(--borde);
+    min-height: 54px;
+    background: #e9f2ff;
+    border-radius: 8px;
+  }
+
+  #mensajesONU {
+    height: 160px;
+    overflow-y: auto;
+    border: 1px solid var(--borde);
+    padding: 8px;
+    background: #f8fbff;
+    border-radius: 8px;
+  }
+
+  .tag {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 6px;
+    background: #e9f2ff;
+    color: var(--azul);
+    font-size: 12px;
+    margin-left: 6px;
+  }
+
+  .muted {
+    color: #555;
+  }
+
+  .modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+  }
+
+  .modal-content {
+    background: var(--card);
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    width: 90%;
+    max-width: 600px;
+    text-align: center;
+    animation: modalIn 0.4s ease-out;
+  }
+
+  @keyframes modalIn {
+    from { transform: scale(0.8); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+  }
+
+  #mercadoCanvas {
+    background: var(--graph-bg);
+    border: 1px solid var(--borde);
+    margin-bottom: 10px;
+    width: 100%;
+    height: 200px;
+  }
+  
+  .end-game-modal {
+    background: #fff;
+    padding: 40px;
+    border-radius: 15px;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+    text-align: center;
+    transform: scale(0.9);
+    animation: bounceIn 0.8s forwards;
+  }
+
+  @keyframes bounceIn {
+    0% { transform: scale(0.5); opacity: 0; }
+    50% { transform: scale(1.1); opacity: 1; }
+    100% { transform: scale(1); }
+  }
+
+  #lawsContainer {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+  }
+
+  @media (max-width: 768px) {
+    .row {
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .col {
+      min-width: unset;
+      width: 100%;
+    }
+  }
+</style>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-sA+v7MFIreJULGJ9IOFGL3r3OTnMeJmX7aY5V5s2o3w=" crossorigin="" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-o9N1jCMmm+lf9jTKxIta9Gfko8npQ3/8A5iNa4JzYD0=" crossorigin=""></script>
+</head>
+<body>
+
+<h1>Rayo War</h1>
+
+<div id="seleccionPais">
+  <h2>Elige tu país:</h2>
+  <div id="countryButtons" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; min-height: 120px; padding: 10px; border: 1px dashed #004080; border-radius: 10px;">
+    <div style="grid-column: 1 / -1; color: #555; font-weight: bold;">Cargando países...</div>
+  </div>
+</div>
+
+<div id="leafletPanel" class="panel">
+  <h2 style="margin-top: 0;">Mapa real con OpenStreetMap</h2>
+  <div id="mapaOSM"></div>
+  <p style="text-align: right; font-size: 12px; color: #555; margin-top: 10px;">© OpenStreetMap contributors</p>
+</div>
+
+<div id="panelPrincipal" class="panel" style="display:none;">
+  <div class="row">
+    <div class="col">
+      <h3>Tú (<span id="miPaisNombre">—</span>)</h3>
+      <p>Dinero: $<span id="miDinero">0</span>
+         <span id="bonosComercio" class="tag" title="Bonus por aliados">+0% comercio</span>
+         <span id="monedasVirtuales" class="tag" title="Monedas virtuales" style="background: #ffd700; color: #000;">⭐ <span id="contadorMonedas">0</span></span></p>
+      <p>Población: <span id="miPoblacion">0</span> <span id="seguridadTag" class="tag" title="Nivel de seguridad">Seguridad: Alto</span></p>
+      <p>Fuerza de Unidades: <span id="fuerzaUnidades">10</span></p>
+      <div>
+        <button class="btn" onclick="crearUnidad('soldado')">Soldado ($1500)</button>
+        <button class="btn" onclick="crearUnidad('tanque')">Tanque ($4500)</button>
+        <button class="btn" onclick="crearUnidad('artilleria')">Artillería ($8000)</button>
+      </div>
+      <div>
+        <button class="btn sec" onclick="construirEdificio('casa')">Construir Casa ($3000)</button>
+        <button class="btn sec" onclick="construirEdificio('fabrica')">Construir Fábrica ($6000)</button>
+        <button class="btn ok" onclick="abrirMercado()">Mercado Financiero</button>
+      </div>
+      <div>
+        <button class="btn" onclick="comprarAlimentos()">Comprar Alimentos ($800)</button>
+        <button class="btn" onclick="mejorarSeguridad()">Mejorar Seguridad ($1500)</button>
+        <button class="btn" onclick="invertirEnInvestigacion()">Invertir en I+D ($2500)</button>
+      </div>
+      <div style="margin-top: 10px;">
+        <h4>Leyes disponibles:</h4>
+        <div id="lawsContainer">
+          <button class="btn" onclick="establecerLey('impuestos altos')">Impuestos Altos</button>
+          <button class="btn" onclick="establecerLey('impulsar ejercito')">Impulsar Ejército</button>
+          <button class="btn" onclick="establecerLey('gasto social')">Gasto Social</button>
+          <button class="btn" onclick="establecerLey('enfocarse en economia')">Economía</button>
+          <button class="btn" onclick="establecerLey('crear maravilla')">Crear Maravilla</button>
+          <button class="btn espia" onclick="establecerLey('espionaje')">Espionaje ($5000)</button>
+          <button class="btn" onclick="establecerLey('investigacion avanzada')">Investigación Avanzada</button>
+          <button class="btn" onclick="establecerLey('construir infraestructura')">Construir Infraestructura</button>
+          <button class="btn" onclick="establecerLey('reclutamiento masivo')">Reclutamiento Masivo</button>
+        </div>
+      </div>
+      <div>
+        <button class="btn ok" onclick="abrirModalAyuda()">Ayudar País</button>
+      </div>
+      <div>
+        <button class="btn" onclick="abrirTienda()" style="background: #ffd700; color: #000;">🏪 Tienda (⭐<span id="monedasBoton">0</span>)</button>
+        <button class="btn" onclick="abrirTutorial()" style="background: #17a2b8;">🎓 Tutorial</button>
+        <button class="btn warn" onclick="reiniciarPartida()">Reiniciar Partida</button>
+      </div>
+    </div>
+
+    <div class="col">
+      <h3>Guerra y Alianzas</h3>
+      <div>
+        <label for="paisesEnemigos">Selecciona país:</label>
+        <select id="paisesEnemigos" style="min-width:240px; width: 100%" onchange="populateCitiesForSelectedCountry()"></select>
+      </div>
+      <div style="margin-top:8px;">
+        <label for="ciudadesEnemigas">Selecciona ciudad:</label>
+        <select id="ciudadesEnemigas" style="min-width:240px; width: 100%"></select>
+      </div>
+      <div style="margin-top:8px;">
+        <button class="btn" onclick="verCiudad()">Ver info</button>
+        <button class="btn warn" onclick="atacarCiudad()">Atacar</button>
+      </div>
+      <div style="margin-top:8px;">
+        <button class="btn ok" onclick="pedirAlianza()">Pedir Alianza</button>
+        <button class="btn" onclick="verSolicitudes()">Ver Solicitudes</button>
+        <button class="btn" onclick="romperTodasMisAlianzas(true)">Romper TODAS mis alianzas</button>
+      </div>
+      <div id="infoPais"></div>
+    </div>
+  </div>
+</div>
+
+<div id="panelSecundario" class="panel row" style="display:none;">
+  <div class="col">
+    <h3>Ranking de Países</h3>
+    <div class="table-responsive">
+      <table>
+        <thead><tr><th>País</th><th>Dinero</th><th>Unidades</th><th>Fuerza</th><th>Edificios</th><th>Población</th><th>Aliados</th></tr></thead>
+        <tbody id="rankingBody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="col">
+    <h3>Mensajes ONU</h3>
+    <div id="mensajesONU"></div>
+  </div>
+</div>
+
+<div id="mercadoModal" class="modal" style="display:none;">
+  <div class="modal-content">
+    <h3>Mercado Financiero: Acciones de Oro</h3>
+    <canvas id="mercadoCanvas" width="560" height="200"></canvas>
+    <p>Precio de la acción: $<span id="precioAccion">100</span></p>
+    <p>Tus acciones: <span id="misAcciones">0</span></p>
+    <div>
+      <button class="btn ok" onclick="comprarAcciones()">Comprar ($<span id="costoAccionCompra">100</span>)</button>
+      <button class="btn warn" onclick="venderAcciones()">Vender ($<span id="costoAccionVenta">100</span>)</button>
+      <button class="btn" onclick="cerrarMercado()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<div id="solicitudesModal" class="modal" style="display:none;">
+    <div class="modal-content">
+        <h3>Solicitudes de Alianza</h3>
+        <div id="listaSolicitudes"></div>
+        <button class="btn" onclick="cerrarSolicitudes()">Cerrar</button>
+    </div>
+</div>
+
+<!-- Modal de Fin de Juego -->
+<div id="gameOverModal" class="modal" style="display:none;">
+  <div class="end-game-modal">
+    <h2>¡Has sido conquistado!</h2>
+    <p id="gameOverMessage">La guerra ha terminado para ti. Es hora de reconstruir.</p>
+    <button class="btn" onclick="reiniciarPartida()">Reiniciar Partida</button>
+  </div>
+</div>
+
+<!-- Modal de Victoria -->
+<div id="gameWinModal" class="modal" style="display:none;">
+  <div class="end-game-modal" style="background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb;">
+    <h2 style="color: #155724;">🎉 ¡Victoria!</h2>
+    <p>Has conquistado a todos los países. ¡Eres el único soberano!</p>
+    <p style="font-size: 18px; margin: 20px 0;">Has ganado <span style="color: #ffd700; font-weight: bold;">100 monedas ⭐</span></p>
+    <div style="margin-top: 20px;">
+      <button class="btn" onclick="abrirCalificacionDesdeVictoria()" style="background: #ffd700; color: #000; margin: 5px;">⭐ Calificar el juego</button>
+      <button class="btn ok" onclick="reiniciarPartida()" style="margin: 5px;">Reiniciar Partida</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de Ayuda -->
+<div id="ayudaModal" class="modal" style="display:none;">
+  <div class="modal-content">
+    <h3>Ayudar País</h3>
+    <select id="paisAyuda" style="min-width:240px; width: 100%"></select>
+    <div style="margin-top:10px;">
+      <button class="btn" onclick="donarDinero(500)">Donar $500</button>
+      <button class="btn" onclick="donarDinero(1000)">Donar $1000</button>
+      <button class="btn" onclick="donarUnidad()">Donar Unidad ($1000)</button>
+    </div>
+    <button class="btn" onclick="cerrarAyuda()">Cerrar</button>
+  </div>
+</div>
+
+<!-- Modal de Tienda -->
+<div id="tiendaModal" class="modal" style="display:none;">
+  <div class="modal-content" style="max-width: 800px;">
+    <h2>🏪 Tienda de Mejoras</h2>
+    <p>Tus monedas: <span style="color: #ffd700;">⭐ <span id="monedasTienda">0</span></span></p>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px;">
+      <div class="mejora-card" style="border: 1px solid #ddd; padding: 15px; border-radius: 10px;">
+        <h4>⏱️ Inicio Rápido</h4>
+        <p>Comienza con +2000 de dinero inicial</p>
+        <button class="btn" id="btnInicioRapido" onclick="comprarMejora('inicioRapido', 150)">Comprar (150 ⭐)</button>
+      </div>
+      <div class="mejora-card" style="border: 1px solid #ddd; padding: 15px; border-radius: 10px;">
+        <h4>💰 Economía Plus</h4>
+        <p>+25% de ingresos por tick económico</p>
+        <button class="btn" id="btnEconomiaPlus" onclick="comprarMejora('economiaPlus', 200)">Comprar (200 ⭐)</button>
+      </div>
+      <div class="mejora-card" style="border: 1px solid #ddd; padding: 15px; border-radius: 10px;">
+        <h4>🤝 Diplomático</h4>
+        <p>Alianzas se forman automáticamente</p>
+        <button class="btn" id="btnDiplomatico" onclick="comprarMejora('diplomatico', 300)">Comprar (300 ⭐)</button>
+      </div>
+      <div class="mejora-card" style="border: 1px solid #ddd; padding: 15px; border-radius: 10px;">
+        <h4>🎯 Estratega</h4>
+        <p>Puedes ver las estadísticas de todos los países</p>
+        <button class="btn" id="btnEstratega" onclick="comprarMejora('estratega', 250)">Comprar (250 ⭐)</button>
+      </div>
+      <div class="mejora-card" style="border: 1px solid #ddd; padding: 15px; border-radius: 10px;">
+        <h4>💥 Conquistador</h4>
+        <p>Tus ataques tienen 20% más fuerza</p>
+        <button class="btn" id="btnConquistador" onclick="comprarMejora('conquistador', 400)">Comprar (400 ⭐)</button>
+      </div>
+    </div>
+    <button class="btn" onclick="cerrarTienda()" style="margin-top: 20px;">Cerrar Tienda</button>
+  </div>
+</div>
+
+<!-- Modal de Tutorial -->
+<div id="tutorialModal" class="modal" style="display:none;">
+  <div class="modal-content" style="max-width: 700px;">
+    <h2>🎓 Tutorial - Rayo War</h2>
+    <div id="tutorialContent" style="max-height: 400px; overflow-y: auto;">
+      <div class="tutorial-seccion">
+        <h3>🎯 Objetivo del Juego</h3>
+        <p>Conquista todos los países del mundo usando <strong>estrategia, diplomacia y economía</strong>. No es solo un juego de guerra, ¡las alianzas son clave!</p>
+      </div>
+      
+      <div class="tutorial-seccion">
+        <h3>💰 Economía</h3>
+        <p><strong>Dinero:</strong> Se genera automáticamente cada 2 segundos basado en población, edificios y aliados.</p>
+        <p><strong>Edificios:</strong> Casas dan población, fábricas dan más dinero.</p>
+        <p><strong>Alimentos:</strong> Aumentan población y seguridad.</p>
+      </div>
+      
+      <div class="tutorial-seccion">
+        <h3>⚔️ Militar</h3>
+        <p><strong>Unidades:</strong> Soldados (baratos), Tanques (equilibrados), Artillería (caros pero poderosos).</p>
+        <p><strong>Fuerza:</strong> Se calcula: (Tus unidades + Unidades aliados) × Fuerza base.</p>
+        <p><strong>I+D:</strong> Aumenta la fuerza base de todas tus unidades.</p>
+      </div>
+      
+      <div class="tutorial-seccion">
+        <h3>🤝 Diplomacia</h3>
+        <p><strong>Alianzas:</strong> ¡MUY IMPORTANTES! Los aliados suman su fuerza a la tuya en combate.</p>
+        <p><strong>Solicitudes:</strong> Puedes enviar y recibir solicitudes de alianza.</p>
+        <p><strong>Traiciones:</strong> Romper alianzas tiene consecuencias políticas.</p>
+      </div>
+      
+      <div class="tutorial-seccion">
+        <h3>🎢 Eventos Aleatorios</h3>
+        <p>Cada 5 segundos pueden ocurrir: crisis económicas, desastres naturales, epidemias, sabotajes, etc.</p>
+        <p><strong>Tip:</strong> Mantén alta seguridad para evitar rebeliones.</p>
+      </div>
+      
+      <div class="tutorial-seccion">
+        <h3>🗺️ Navegación del Mapa</h3>
+        <p><strong>Arrastrar:</strong> Click y arrastra para mover el mapa.</p>
+        <p><strong>Zoom:</strong> Rueda del mouse o botones +/-.</p>
+        <p><strong>Recursos:</strong> Haz click en los puntos dorados/azules para recogerlos.</p>
+      </div>
+      
+      <div class="tutorial-seccion">
+        <h3>⭐ Sistema de Monedas</h3>
+        <p><strong>Ganas 100 monedas</strong> cada vez que conquistas el mundo.</p>
+        <p>Usa las monedas en la <strong>tienda</strong> para comprar mejoras permanentes.</p>
+      </div>
+      
+      <div class="tutorial-seccion" style="background: #e8f5e8; padding: 10px; border-radius: 8px;">
+        <h3>🏆 Consejos de Estrategia</h3>
+        <p>• <strong>Forma alianzas temprano</strong> - Son tu mejor defensa</p>
+        <p>• <strong>Equilibra economía y militar</strong> - No descuides ninguno</p>
+        <p>• <strong>Mantén alta seguridad</strong> - Evita rebeliones</p>
+        <p>• <strong>Usa el espionaje</strong> - Conoce a tus enemigos</p>
+        <p>• <strong>No ataques aliados</strong> - A menos que sea absolutamente necesario</p>
+      </div>
+    </div>
+    <button class="btn" onclick="cerrarTutorial()">Entendido</button>
+  </div>
+</div>
+
+<!-- Modal de Calificación -->
+<div id="calificacionModal" class="modal" style="display:none;">
+  <div class="modal-content" style="text-align: center; position: relative;">
+    <button onclick="cerrarCalificacion()" style="position: absolute; top: 10px; right: 15px; background: none; border: none; font-size: 24px; color: #999; cursor: pointer; padding: 0; line-height: 1;" title="Cerrar">×</button>
+    <h2>🎉 ¡Felicidades por tu victoria!</h2>
+    <p style="font-size: 18px; margin: 20px 0;">Has ganado <span style="color: #ffd700; font-weight: bold;">100 monedas ⭐</span></p>
+    <div style="margin: 30px 0;">
+      <h3>¿Qué tal te pareció el juego?</h3>
+      <p>Califica de 1 a 10 estrellas:</p>
+      <div id="estrellas" style="margin: 20px 0;">
+        <span class="estrella" onclick="seleccionarEstrella(1)">⭐</span>
+        <span class="estrella" onclick="seleccionarEstrella(2)">⭐</span>
+        <span class="estrella" onclick="seleccionarEstrella(3)">⭐</span>
+        <span class="estrella" onclick="seleccionarEstrella(4)">⭐</span>
+        <span class="estrella" onclick="seleccionarEstrella(5)">⭐</span>
+        <span class="estrella" onclick="seleccionarEstrella(6)">⭐</span>
+        <span class="estrella" onclick="seleccionarEstrella(7)">⭐</span>
+        <span class="estrella" onclick="seleccionarEstrella(8)">⭐</span>
+        <span class="estrella" onclick="seleccionarEstrella(9)">⭐</span>
+        <span class="estrella" onclick="seleccionarEstrella(10)">⭐</span>
+      </div>
+      <div id="calificacionTexto" style="margin: 10px 0; font-size: 18px; font-weight: bold; color: #ffd700; display: none;">
+        Has seleccionado: <span id="numeroEstrellas">0</span>/10 estrellas
+      </div>
+      <button class="btn ok" id="enviarCalificacion" onclick="enviarCalificacion()" style="display:none;">Enviar Calificación</button>
+      <button class="btn" onclick="cerrarCalificacion()">Ahora no</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ====== Estado y Datos del Juego ====== */
+const canvas = document.getElementById('mapa');
+const ctx = canvas?.getContext?.('2d') || null;
+const mercadoCanvas = document.getElementById('mercadoCanvas');
+const mercadoCtx = mercadoCanvas.getContext('2d');
+
+let jugadores = [];
+let ciudades = [];
+let recursos = [];
+let construcciones = [];
+let unidades = [];
+let proyectiles = [];
+let explosiones = [];
+
+// Variables para navegación del mapa
+let mapOffsetX = 0;
+let mapOffsetY = 0;
+let mapScale = 1;
+let isDragging = false;
+let dragStartX = 0;
+let dragStartY = 0;
+let lastOffsetX = 0;
+let lastOffsetY = 0;
+let animationFrameId = null;
+
+let miNombre = "";
+let miColor = "";
+let fuerzaBaseUnidades = 10;
+let seguridad = 100;
+let stock = { precio: 100, historico: [], fluctuacion: 0.05, misAcciones: 0 };
+let isPlaying = false;
+let gameLoopInterval = null;
+let economyInterval = null;
+let eventsInterval = null;
+let marketInterval = null;
+function getTotalFuerza(jugador) {
+  let total = (jugador.unidades || 0) * fuerzaBaseUnidades;
+  for (let aliado of (jugador.aliados || [])) {
+    let aliadoJug = jugadores.find(j => j.nombre === aliado);
+    if (aliadoJug) total += (aliadoJug.unidades || 0) * fuerzaBaseUnidades;
+  }
+  return total;
+}
+
+// The static map data is the single source of truth for the game world.
+// Devuelve los datos sin modificarlos, para respetar la posición manual.
+function separarCiudades(data) {
+  return JSON.parse(JSON.stringify(data));
+}
+
+const mapaData = separarCiudades({
+    "Canadá": { color: "#800000", puntos: [[80, 100], [260, 80], [320, 220], [220, 320], [160, 260]], ciudades: [{ nombre: "Toronto", puntos: [[140, 120], [220, 90], [280, 150], [220, 190]], poblacion: 40, edificios: 2 }, { nombre: "Vancouver", puntos: [[80, 220], [160, 180], [220, 240], [170, 280]], poblacion: 25, edificios: 1 }] },
+    "México": { color: "#006400", puntos: [[240, 560], [360, 520], [440, 620], [360, 740], [280, 700]], ciudades: [{ nombre: "Ciudad de México", puntos: [[260, 620], [340, 580], [400, 650], [340, 690]], poblacion: 60, edificios: 3 }, { nombre: "Cancún", puntos: [[320, 740], [380, 720], [440, 780], [380, 800]], poblacion: 20, edificios: 1 }] },
+    "Colombia": { color: "#ffb400", puntos: [[320, 840], [420, 780], [520, 860], [420, 940]], ciudades: [{ nombre: "Bogotá", puntos: [[320, 880], [400, 840], [480, 920], [400, 960]], poblacion: 40, edificios: 2 }, { nombre: "Medellín", puntos: [[360, 920], [440, 880], [500, 940], [440, 980]], poblacion: 35, edificios: 2 }] },
+    "Perú": { color: "#ffc90a", puntos: [[380, 1000], [480, 960], [560, 1040], [480, 1100]], ciudades: [{ nombre: "Lima", puntos: [[360, 1040], [440, 1000], [520, 1060], [440, 1100]], poblacion: 45, edificios: 2 }, { nombre: "Arequipa", puntos: [[400, 1120], [480, 1080], [560, 1140], [480, 1180]], poblacion: 25, edificios: 1 }] },
+    "Chile": { color: "#004080", puntos: [[340, 1260], [420, 1220], [480, 1300], [420, 1360]], ciudades: [{ nombre: "Santiago", puntos: [[320, 1260], [380, 1220], [440, 1280], [380, 1320]], poblacion: 50, edificios: 2 }, { nombre: "Valparaíso", puntos: [[360, 1320], [420, 1280], [480, 1340], [420, 1380]], poblacion: 30, edificios: 1 }, { nombre: "Concepción", puntos: [[340, 1380], [400, 1340], [460, 1400], [400, 1440]], poblacion: 20, edificios: 1 }] },
+    "Brasil": { color: "#ffcc00", puntos: [[540, 900], [760, 860], [840, 980], [760, 1080], [620, 1040]], ciudades: [{ nombre: "Rio de Janeiro", puntos: [[600, 980], [680, 940], [780, 1020], [700, 1060]], poblacion: 70, edificios: 4 }, { nombre: "Sao Paulo", puntos: [[660, 1040], [740, 1000], [840, 1080], [760, 1120]], poblacion: 80, edificios: 4 }] },
+    "Argentina": { color: "#339933", puntos: [[700, 1180], [860, 1140], [920, 1260], [820, 1320]], ciudades: [{ nombre: "Buenos Aires", puntos: [[640, 1240], [720, 1200], [840, 1260], [760, 1300]], poblacion: 60, edificios: 3 }, { nombre: "Córdoba", puntos: [[700, 1300], [780, 1260], [900, 1320], [820, 1360]], poblacion: 40, edificios: 2 }] },
+    "Reino Unido": { color: "#00247d", puntos: [[820, 180], [900, 150], [960, 220], [880, 250]], ciudades: [{ nombre: "Londres", puntos: [[820, 180], [900, 150], [960, 220], [880, 250]], poblacion: 85, edificios: 5 }, { nombre: "Manchester", puntos: [[760, 220], [840, 190], [900, 250], [840, 280]], poblacion: 60, edificios: 3 }] },
+    "España": { color: "#cc0000", puntos: [[900, 360], [980, 320], [1060, 380], [980, 420]], ciudades: [{ nombre: "Madrid", puntos: [[860, 360], [940, 320], [1020, 380], [940, 420]], poblacion: 50, edificios: 2 }, { nombre: "Barcelona", puntos: [[920, 400], [1000, 360], [1080, 420], [1000, 460]], poblacion: 30, edificios: 2 }] },
+    "Francia": { color: "#0055a4", puntos: [[980, 340], [1060, 300], [1140, 360], [1080, 420]], ciudades: [{ nombre: "París", puntos: [[980, 340], [1060, 300], [1140, 360], [1080, 420]], poblacion: 70, edificios: 4 }, { nombre: "Marsella", puntos: [[1020, 420], [1100, 380], [1180, 440], [1100, 480]], poblacion: 50, edificios: 3 }] },
+    "Alemania": { color: "#333333", puntos: [[1060, 280], [1140, 240], [1220, 300], [1160, 360]], ciudades: [{ nombre: "Berlín", puntos: [[1080, 280], [1160, 240], [1240, 300], [1160, 340]], poblacion: 80, edificios: 5 }, { nombre: "Múnich", puntos: [[1100, 360], [1180, 320], [1260, 380], [1180, 420]], poblacion: 60, edificios: 3 }] },
+    "Italia": { color: "#009246", puntos: [[1140, 420], [1220, 380], [1300, 440], [1220, 500]], ciudades: [{ nombre: "Roma", puntos: [[1160, 460], [1240, 420], [1320, 480], [1240, 520]], poblacion: 65, edificios: 4 }, { nombre: "Milán", puntos: [[1120, 400], [1200, 360], [1280, 420], [1200, 460]], poblacion: 55, edificios: 3 }] },
+    "Egipto": { color: "#c09300", puntos: [[1240, 600], [1320, 560], [1400, 620], [1320, 660]], ciudades: [{ nombre: "El Cairo", puntos: [[1240, 620], [1320, 580], [1400, 640], [1320, 680]], poblacion: 70, edificios: 3 }, { nombre: "Alejandría", puntos: [[1200, 580], [1280, 540], [1360, 600], [1280, 640]], poblacion: 50, edificios: 2 }] },
+    "Nigeria": { color: "#008751", puntos: [[1220, 820], [1300, 780], [1380, 840], [1320, 880]], ciudades: [{ nombre: "Lagos", puntos: [[1220, 820], [1300, 780], [1380, 840], [1300, 880]], poblacion: 80, edificios: 3 }, { nombre: "Abuya", puntos: [[1260, 900], [1340, 860], [1420, 920], [1340, 960]], poblacion: 60, edificios: 2 }] },
+    "Sudáfrica": { color: "#007a4d", puntos: [[1240, 1040], [1320, 1000], [1400, 1060], [1320, 1100]], ciudades: [{ nombre: "Ciudad del Cabo", puntos: [[1240, 1080], [1320, 1040], [1400, 1100], [1320, 1140]], poblacion: 60, edificios: 3 }, { nombre: "Johannesburgo", puntos: [[1280, 1020], [1360, 980], [1440, 1040], [1360, 1080]], poblacion: 50, edificios: 2 }] },
+    "India": { color: "#ff9933", puntos: [[1480, 620], [1560, 580], [1660, 640], [1580, 700]], ciudades: [{ nombre: "Nueva Delhi", puntos: [[1480, 620], [1560, 580], [1640, 640], [1560, 680]], poblacion: 100, edificios: 5 }, { nombre: "Bombay", puntos: [[1500, 700], [1580, 660], [1660, 720], [1580, 760]], poblacion: 90, edificios: 4 }] },
+    "China": { color: "#e60000", puntos: [[1620, 480], [1700, 440], [1780, 500], [1740, 560]], ciudades: [{ nombre: "Pekín", puntos: [[1620, 480], [1700, 440], [1780, 500], [1700, 540]], poblacion: 120, edificios: 7 }, { nombre: "Shanghái", puntos: [[1660, 560], [1740, 520], [1820, 580], [1740, 620]], poblacion: 110, edificios: 6 }] },
+    "Rusia": { color: "#5488c7", puntos: [[1360, 120], [1440, 80], [1520, 140], [1480, 200], [1400, 180]], ciudades: [{ nombre: "Moscú", puntos: [[1360, 120], [1440, 80], [1520, 140], [1440, 180], [1400, 180]], poblacion: 90, edificios: 5 }, { nombre: "San Petersburgo", puntos: [[1400, 40], [1480, 0], [1560, 60], [1480, 100]], poblacion: 70, edificios: 4 }] },
+    "Japón": { color: "#ff6a6a", puntos: [[1820, 560], [1900, 520], [1980, 580], [1920, 640]], ciudades: [{ nombre: "Tokio", puntos: [[1820, 560], [1900, 520], [1980, 580], [1920, 640]], poblacion: 100, edificios: 6 }, { nombre: "Osaka", puntos: [[1780, 600], [1860, 560], [1940, 620], [1880, 660]], poblacion: 80, edificios: 5 }] },
+    "Australia": { color: "#36a338", puntos: [[1820, 1180], [1900, 1140], [1980, 1200], [1920, 1260]], ciudades: [{ nombre: "Sídney", puntos: [[1820, 1180], [1900, 1140], [1980, 1200], [1920, 1260]], poblacion: 70, edificios: 4 }, { nombre: "Melbourne", puntos: [[1780, 1240], [1860, 1200], [1940, 1260], [1880, 1300]], poblacion: 65, edificios: 3 }] }
+});
+
+/* ====== Inicio del Juego ====== */
+function initLeafletMap() {
+  const container = document.getElementById('mapaOSM');
+  if (!container || typeof L === 'undefined') return;
+
+  const mapaOSM = L.map('mapaOSM').setView([20, 0], 2);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>',
+    maxZoom: 19,
+  }).addTo(mapaOSM);
+
+  L.marker([20, 0])
+    .addTo(mapaOSM)
+    .bindPopup('Mapa global de OpenStreetMap para tu juego.');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  setupCountrySelection();
+  initLeafletMap();
+  requestAnimationFrame(gameLoop);
+});
+
+function setupCountrySelection() {
+  const container = document.getElementById("countryButtons");
+  if (!container) return;
+
+  const paises = Object.keys(mapaData);
+  if (paises.length === 0) {
+    container.innerHTML = '<div style="grid-column: 1 / -1; color: #c2272d; font-weight: bold;">No hay países disponibles. Recarga la página.</div>';
+    return;
+  }
+
+  container.innerHTML = '';
+  paises.forEach(pais => {
+    const btn = document.createElement("button");
+    btn.textContent = pais;
+    btn.className = "btn";
+    btn.style.backgroundColor = mapaData[pais].color;
+    btn.onclick = () => empezarJuego(pais);
+    container.appendChild(btn);
+  });
+}
+
+// Variable para rastrear el tiempo de inicio del juego
+let inicioJuego = 0;
+
+function empezarJuego(paisSeleccionado) {
+  // Clear all previous game state and intervals
+  jugadores = [];
+  ciudades = [];
+  recursos = [];
+  construcciones = [];
+  unidades = [];
+  proyectiles = [];
+  explosiones = [];
+  fuerzaBaseUnidades = 10;
+  seguridad = 100;
+  stock = { precio: 100, historico: [], fluctuacion: 0.05, misAcciones: 0 };
+  isPlaying = true;
+  inicioJuego = Date.now(); // Registrar el momento de inicio
+  if(economyInterval) clearInterval(economyInterval);
+  if(eventsInterval) clearInterval(eventsInterval);
+  if(marketInterval) clearInterval(marketInterval);
+  
+  // Mensaje de dificultad y período de gracia
+  alert('¡Atención! El mundo ahora tiene 20 países con múltiples ciudades. ¡La conquista será más difícil! Tienes un período de gracia de 30 segundos antes de que los países enemigos puedan atacarte.');
+
+  miNombre = paisSeleccionado;
+  if (!animationFrameId) {
+    animationFrameId = requestAnimationFrame(gameLoop);
+  }
+  miColor = mapaData[paisSeleccionado].color;
+  
+  // Initialize the game world from the static data
+  Object.keys(mapaData).forEach(pais => {
+    const isPlayer = pais === paisSeleccionado;
+    const jugador = {
+        nombre: pais,
+        dinero: isPlayer ? 8000 : 6500, // Más dinero inicial para el jugador
+        unidades: isPlayer ? 2 : 0,     // El jugador comienza con algunas unidades
+        edificios: 0,
+        aliados: [],
+        solicitudes: [],
+        poblacion: 100,
+        isRobot: !isPlayer,
+        ciudades: [],
+        // Nueva métrica de IA para espionaje
+        fuerzaIA: 0
+    };
+    
+    // Aplicar mejora inicio rápido
+    if (isPlayer && mejoras.inicioRapido) {
+      jugador.dinero += 2000;
+    }
+    
+    jugadores.push(jugador);
+  });
+  
+  // Now, link the cities to the players and populate the global cities array
+  Object.keys(mapaData).forEach(pais => {
+    const jugador = jugadores.find(j => j.nombre === pais);
+    if (jugador) {
+        mapaData[pais].ciudades.forEach(ciudadData => {
+            const nuevaCiudad = {
+                ...ciudadData,
+                pais,
+                propietario: pais,
+                colorPaisOriginal: mapaData[pais].color,
+                seguridad: 100 // Cada ciudad tiene su propia seguridad
+            };
+            jugador.ciudades.push(nuevaCiudad.nombre);
+            ciudades.push(nuevaCiudad);
+        });
+    }
+  });
+
+  // Display game UI elements
+  document.getElementById("miPaisNombre").textContent = miNombre;
+  document.getElementById("seleccionPais").style.display = "none";
+  const mapaContainer = document.getElementById("mapaContainer");
+  if (mapaContainer) mapaContainer.style.display = "block";
+  document.getElementById("panelPrincipal").style.display = "block";
+  document.getElementById("panelSecundario").style.display = "flex";
+  
+  // Inicializar controles del mapa con vista centrada solo si existe el canvas antiguo
+  if (typeof initMapControls === 'function') initMapControls();
+
+  if (recursos.length === 0) initRecursos();
+  populateEnemyCountriesDropdown();
+  // Crear unidades iniciales para el jugador
+  const misCiudades = ciudades.filter(c => c.propietario === miNombre);
+  if (misCiudades.length > 0) {
+    // Añadir 2 unidades en la primera ciudad del jugador
+    for (let i = 0; i < 2; i++) {
+      const ciudad = misCiudades[0];
+      const [x, y] = getRandomPointInPolygon(ciudad.puntos);
+      unidades.push({ 
+        x, 
+        y, 
+        tipo: i === 0 ? 'soldado' : 'tanque', 
+        propietario: miNombre 
+      });
+    }
+  }
+  
+  actualizarHUD();
+  addONU(`Bienvenido comandante de ${miNombre}. Tienes un período de gracia de 30 segundos.`);
+  
+  drawMap();
+
+  economyInterval = setInterval(tickEconomia, 2000);
+  eventsInterval = setInterval(eventosAleatorios, 4000); // Eventos más frecuentes para aumentar dificultad
+  marketInterval = setInterval(simularMercado, 1000);
+}
+
+/* ====== Mundo ====== */
+function initRecursos() {
+  for (let i = 0; i < 30; i++) { // Más recursos para el mapa más grande
+    recursos.push({ 
+      x: 100 + Math.random() * 2100, // Distribución en todo el mapa
+      y: 100 + Math.random() * 1300, // Distribución en todo el mapa
+      tipo: Math.random() < 0.8 ? "oro" : "diamante",
+      valor: Math.random() < 0.8 ? 900 + Math.floor(Math.random() * 900) : 2000 + Math.floor(Math.random() * 1000),
+      activo: true 
+    });
+  }
+}
+
+/* ====== Dibujo ====== */
+function drawMap() {
+    if (!ctx || !canvas) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!mapaData) return;
+    
+    // Aplicar transformación para navegación
+    ctx.save();
+    ctx.translate(mapOffsetX, mapOffsetY);
+    ctx.scale(mapScale, mapScale);
+
+    Object.entries(mapaData).forEach(([pais, data]) => {
+        const propietarioDominante = Object.entries(
+            ciudades.filter(c => c.pais === pais).reduce((counts, c) => {
+                counts[c.propietario] = (counts[c.propietario] || 0) + 1;
+                return counts;
+            }, {})
+        ).sort((a, b) => b[1] - a[1])[0]?.[0];
+
+        const propietario = jugadores.find(j => j.nombre === propietarioDominante);
+        const color = propietario ? mapaData[propietario.nombre]?.color || data.color : data.color;
+
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        if (data.puntos && data.puntos.length > 0) {
+            ctx.moveTo(data.puntos[0][0], data.puntos[0][1]);
+            for (let i = 1; i < data.puntos.length; i++) {
+                ctx.lineTo(data.puntos[i][0], data.puntos[i][1]);
+            }
+        }
+        ctx.closePath();
+        ctx.fill();
+        
+        ctx.strokeStyle = varColor('--borde');
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        const centroX = data.puntos.reduce((sum, p) => sum + p[0], 0) / data.puntos.length;
+        const centroY = data.puntos.reduce((sum, p) => sum + p[1], 0) / data.puntos.length;
+        
+        // Ajustar tamaño de fuente según el zoom
+        const fontSize = Math.max(10, Math.min(18, 16 * mapScale));
+        ctx.fillStyle = "#fff";
+        ctx.font = `bold ${fontSize}px Inter, sans-serif`;
+        ctx.textAlign = "center";
+        ctx.strokeStyle = "#000";
+        ctx.lineWidth = 2;
+        ctx.strokeText(pais, centroX, centroY);
+        ctx.fillText(pais, centroX, centroY);
+    });
+
+    
+    ctx.restore();
+}
+function drawRecursos() {
+  if (!ctx) return;
+  ctx.save();
+  ctx.translate(mapOffsetX, mapOffsetY);
+  ctx.scale(mapScale, mapScale);
+  
+  recursos.forEach(r => {
+    if (!r.activo) return;
+    ctx.fillStyle = r.tipo === "diamante" ? "#00ffff" : "#ffd700";
+    ctx.beginPath();
+    ctx.arc(r.x, r.y, 8, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  
+  ctx.restore();
+}
+function drawConstrucciones() {
+  if (!ctx) return;
+  ctx.save();
+  ctx.translate(mapOffsetX, mapOffsetY);
+  ctx.scale(mapScale, mapScale);
+  
+  construcciones.forEach(b => {
+    const jugador = jugadores.find(j => j.nombre === b.propietario);
+    if (!jugador) return;
+    ctx.fillStyle = b.tipo === "casa" ? "#ff7f50" : "#6c757d";
+    ctx.fillRect(b.x - 10, b.y - 10, 20, 20);
+  });
+  
+  ctx.restore();
+}
+function drawUnidades() {
+  if (!ctx) return;
+  ctx.save();
+  ctx.translate(mapOffsetX, mapOffsetY);
+  ctx.scale(mapScale, mapScale);
+  
+  unidades.forEach(u => {
+    const jugador = jugadores.find(j => j.nombre === u.propietario);
+    if (!jugador) return;
+    ctx.fillStyle = (u.tipo === "soldado") ? "#16a34a" : (u.tipo === "tanque") ? "#1d4ed8" : "#6b7280";
+    const r = (u.tipo === "soldado") ? 5 : (u.tipo === "tanque") ? 8 : 11;
+    ctx.beginPath();
+    ctx.arc(u.x, u.y, r, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  
+  ctx.restore();
+}
+function drawProyectiles() {
+  if (!ctx) return;
+  ctx.save();
+  ctx.translate(mapOffsetX, mapOffsetY);
+  ctx.scale(mapScale, mapScale);
+  
+  proyectiles = proyectiles.filter(p => !p.done);
+  
+  ctx.restore();
+}
+
+function drawExplosiones() {
+  if (!ctx) return;
+  ctx.save();
+  ctx.translate(mapOffsetX, mapOffsetY);
+  ctx.scale(mapScale, mapScale);
+  
+  explosiones = explosiones.filter(e => !e.done);
+  
+  ctx.restore();
+}
+
+/* ====== Economía / HUD / Ranking ====== */
+function tickEconomia() {
+  if (!isPlaying) return;
+  jugadores.forEach(j => {
+    if (j.nombre === "Conquistado") return;
+
+    let totalPoblacion = 0;
+    let totalEdificios = 0;
+    let seguridadTotal = 0;
+
+    ciudades.filter(c => c.propietario === j.nombre).forEach(c => {
+        totalPoblacion += c.poblacion || 0;
+        totalEdificios += c.edificios || 0;
+        seguridadTotal += c.seguridad || 0;
+        // La seguridad de cada ciudad disminuye gradualmente
+        c.seguridad = Math.max(0, c.seguridad - 0.5);
+    });
+    
+    // Check for rebellion
+    ciudades.filter(c => c.propietario === j.nombre).forEach(c => {
+        if (c.seguridad < 20 && Math.random() < 0.1) {
+            c.propietario = "Conquistado";
+            c.seguridad = 100;
+            const perdedor = jugadores.find(p => p.nombre === j.nombre);
+            addONU(`¡Una rebelión ha estallado en ${c.nombre}! Ahora es territorio neutral.`);
+            perdedor.ciudades = perdedor.ciudades.filter(cn => cn !== c.nombre);
+            checkEndGameCondition();
+        }
+    });
+
+    const aliadosCnt = (j.aliados || []).length;
+    const bonus = Math.min(aliadosCnt * 5, 25);
+    const ingresoBase = 160 + (totalEdificios * 70) + (totalPoblacion * 0.5);
+    let ingresoFinal = Math.floor(ingresoBase * (1 + bonus / 100));
+    
+    // Aplicar mejora economía plus
+    if (j.nombre === miNombre && mejoras.economiaPlus) {
+      ingresoFinal = Math.floor(ingresoFinal * 1.5);
+    }
+    
+    j.dinero += ingresoFinal;
+    j.poblacion = totalPoblacion;
+    j.edificios = totalEdificios;
+  });
+
+  actualizarHUD();
+}
+
+/* ====== Eventos Aleatorios e IA ====== */
+function eventosAleatorios() {
+  if (!isPlaying) return;
+  
+  // Solo ejecutar eventos después del período de gracia (30 segundos)
+  const tiempoJuego = (Date.now() - inicioJuego) / 1000;
+  if (tiempoJuego < 30) return;
+  
+  // Eventos de alianzas de la IA
+  const robots = jugadores.filter(j => j.isRobot && j.nombre !== "Conquistado");
+  
+  robots.forEach(robot => {
+    // Probabilidad de formar alianza (aumentada con mejora diplomática)
+    let probAlianza = 0.02; // 2% base
+    if (mejoras.diplomatico) {
+      probAlianza *= 2; // 4% con mejora diplomática
+    }
+    
+    if (Math.random() < probAlianza) {
+      // Buscar posibles aliados (países que no sean aliados ni enemigos directos)
+      const posiblesAliados = robots.filter(r => 
+        r.nombre !== robot.nombre && 
+        !esAliado(robot.nombre, r.nombre) &&
+        !robot.aliados.includes(r.nombre)
+      );
+      
+      if (posiblesAliados.length > 0) {
+        const aliadoSeleccionado = posiblesAliados[Math.floor(Math.random() * posiblesAliados.length)];
+        
+        // Aceptar alianza automáticamente
+        robot.aliados = robot.aliados || [];
+        aliadoSeleccionado.aliados = aliadoSeleccionado.aliados || [];
+        
+        robot.aliados.push(aliadoSeleccionado.nombre);
+        aliadoSeleccionado.aliados.push(robot.nombre);
+        
+        addONU(`${robot.nombre} y ${aliadoSeleccionado.nombre} han formado una alianza.`);
+        actualizarHUD();
+      }
+    }
+  });
+  
+  // Otros eventos aleatorios pueden ir aquí
+  // Por ejemplo: ataques sorpresa, eventos económicos, etc.
+}
+
+function actualizarHUD() {
+  const yo = jugadores.find(j => j.nombre === miNombre);
+  if (!yo) return;
+  if (!yo.aliados) yo.aliados = [];
+  document.getElementById("miDinero").textContent = yo.dinero.toFixed(2);
+  document.getElementById("miPaisNombre").textContent = miNombre;
+  document.getElementById("bonosComercio").textContent = `+${Math.min(yo.aliados.length * 5, 25)}% comercio`;
+  document.getElementById("miPoblacion").textContent = Math.floor(yo.poblacion);
+  
+  // Promedio de seguridad para el HUD
+  const misCiudades = ciudades.filter(c => c.propietario === miNombre);
+  const totalSeguridad = misCiudades.reduce((sum, c) => sum + c.seguridad, 0);
+  const seguridadPromedio = misCiudades.length > 0 ? totalSeguridad / misCiudades.length : 100;
+
+  document.getElementById("seguridadTag").textContent = (seguridadPromedio > 80) ? "Seguridad: Alta" : (seguridadPromedio > 50) ? "Seguridad: Normal" : "Seguridad: Baja";
+  document.getElementById("fuerzaUnidades").textContent = fuerzaBaseUnidades;
+
+  const tbody = document.getElementById("rankingBody");
+  tbody.innerHTML = "";
+  const rankingJugadores = jugadores.filter(j => j.nombre !== "Conquistado" && !isNaN(j.dinero));
+  rankingJugadores.sort((a, b) => (b.dinero + (b.unidades || 0) * 120 + (b.edificios || 0) * 200 + (b.poblacion || 0) * 50) - (a.dinero + (a.unidades || 0) * 120 + (a.edificios || 0) * 200 + (a.poblacion || 0) * 50))
+    .forEach(j => {
+      const tr = document.createElement("tr");
+      const fuerza = (j.unidades || 0) * fuerzaBaseUnidades;
+      const nombreMostrar = (j.nombre === miNombre) ? "Tú" : j.nombre;
+      tr.innerHTML = `<td>${j.nombre} (${nombreMostrar})</td><td>$${j.dinero.toFixed(2)}</td><td>${j.unidades || 0}</td><td>${fuerza}</td><td>${j.edificios || 0}</td><td>${Math.floor(j.poblacion || 0)}</td><td>${(j.aliados || []).length}</td>`;
+      tbody.appendChild(tr);
+    });
+}
+function populateEnemyCountriesDropdown() {
+    const selectPaises = document.getElementById("paisesEnemigos");
+    const selectCiudades = document.getElementById("ciudadesEnemigas");
+    const selectedCountry = selectPaises.value;
+    selectPaises.innerHTML = "";
+    selectCiudades.innerHTML = "";
+    document.getElementById("infoPais").innerHTML = "";
+
+    const paisesEnemigos = jugadores.filter(j => j.nombre !== miNombre && j.nombre !== "Conquistado");
+    
+    if (paisesEnemigos.length === 0) {
+        const option = document.createElement("option");
+        option.textContent = "¡No hay enemigos!";
+        selectPaises.appendChild(option);
+        return;
+    }
+    
+    paisesEnemigos.forEach(j => {
+        const option = document.createElement("option");
+        option.value = j.nombre;
+        option.textContent = j.nombre;
+        selectPaises.appendChild(option);
+    });
+
+    if (selectedCountry && paisesEnemigos.find(j => j.nombre === selectedCountry)) {
+        selectPaises.value = selectedCountry;
+    }
+    populateCitiesForSelectedCountry();
+}
+function populateCitiesForSelectedCountry() {
+    const selectPaises = document.getElementById("paisesEnemigos");
+    const selectCiudades = document.getElementById("ciudadesEnemigas");
+    const paisSeleccionado = selectPaises.value;
+    const selectedCity = selectCiudades.value;
+    selectCiudades.innerHTML = "";
+    document.getElementById("infoPais").innerHTML = "";
+
+    if (!paisSeleccionado || paisSeleccionado === "¡No hay enemigos!") {
+        const option = document.createElement("option");
+        option.textContent = "Selecciona un país";
+        selectCiudades.appendChild(option);
+        return;
+    }
+
+    const ciudadesDelPais = ciudades.filter(c => c.propietario === paisSeleccionado);
+    
+    ciudadesDelPais.forEach(ciudad => {
+        const option = document.createElement("option");
+        option.value = ciudad.nombre;
+        option.textContent = ciudad.nombre;
+        selectCiudades.appendChild(option);
+    });
+
+    if (selectedCity && ciudadesDelPais.find(c => c.nombre === selectedCity)) {
+        selectCiudades.value = selectedCity;
+    }
+    verCiudad();
+}
+
+/* ====== Acciones del jugador ====== */
+function crearUnidad(tipo) {
+  const j = jugadores.find(x => x.nombre === miNombre);
+  const costo = (tipo === "soldado") ? 1000 : (tipo === "tanque") ? 3000 : 5000;
+  if (j.dinero < costo) { addONU("No tienes suficiente dinero."); return; }
+  j.dinero -= costo;
+  j.unidades = (j.unidades || 0) + 1;
+  const miCiudades = ciudades.filter(c => c.propietario === miNombre);
+  if (miCiudades.length > 0) {
+      const ciudad = miCiudades[Math.floor(Math.random() * miCiudades.length)];
+      const [x, y] = getRandomPointInPolygon(ciudad.puntos);
+      unidades.push({ x, y, tipo, propietario: miNombre, fuerza: fuerzaBaseUnidades });
+  }
+  actualizarHUD();
+}
+function construirEdificio(tipo) {
+  const j = jugadores.find(x => x.nombre === miNombre);
+  const costo = (tipo === "casa") ? 2000 : 4000;
+  if (j.dinero < costo) { addONU("No tienes suficiente dinero."); return; }
+  j.dinero -= costo;
+  const miCiudades = ciudades.filter(c => c.propietario === miNombre);
+  if (miCiudades.length > 0) {
+      const ciudad = miCiudades[Math.floor(Math.random() * miCiudades.length)];
+      ciudad.edificios = (ciudad.edificios || 0) + 1;
+      const [x, y] = getRandomPointInPolygon(ciudad.puntos);
+      construcciones.push({ x, y, tipo, propietario: miNombre, ciudad: ciudad.nombre });
+  }
+  actualizarHUD();
+}
+function getRandomPointInPolygon(polygon) {
+    const minX = Math.min(...polygon.map(p => p[0]));
+    const maxX = Math.max(...polygon.map(p => p[0]));
+    const minY = Math.min(...polygon.map(p => p[1]));
+    const maxY = Math.max(...polygon.map(p => p[1]));
+    let x, y;
+    do {
+        x = minX + Math.random() * (maxX - minX);
+        y = minY + Math.random() * (maxY - minY);
+    } while (!isPointInPolygon(x, y, polygon));
+    return [x, y];
+}
+function isPointInPolygon(x, y, polygon) {
+    let inside = false;
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+        const xi = polygon[i][0], yi = polygon[i][1];
+        const xj = polygon[j][0], yj = polygon[j][1];
+        const intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+        if (intersect) inside = !inside;
+    }
+    return inside;
+}
+function comprarAlimentos() {
+  const j = jugadores.find(x => x.nombre === miNombre);
+  const costo = 500;
+  if (j.dinero < costo) { addONU("No tienes suficiente dinero."); return; }
+  j.dinero -= costo;
+  const miCiudades = ciudades.filter(c => c.propietario === miNombre);
+  miCiudades.forEach(ciudad => {
+      ciudad.poblacion = Math.min(200, (ciudad.poblacion || 0) + 20);
+      ciudad.seguridad = Math.min(100, ciudad.seguridad + 5);
+  });
+  addONU(`Compraste alimentos. Tu población ha crecido y la seguridad ha mejorado.`);
+  actualizarHUD();
+}
+function mejorarSeguridad() {
+  const j = jugadores.find(x => x.nombre === miNombre);
+  const costo = 1000;
+  if (j.dinero < costo) { addONU("No tienes suficiente dinero."); return; }
+  j.dinero -= costo;
+  ciudades.filter(c => c.propietario === miNombre).forEach(c => {
+      c.seguridad = Math.min(100, c.seguridad + 10);
+  });
+  addONU(`Mejoraste la seguridad. Se previene la pérdida de población.`);
+  actualizarHUD();
+}
+function invertirEnInvestigacion() {
+  const j = jugadores.find(x => x.nombre === miNombre);
+  const costo = 1500;
+  if (j.dinero < costo) { addONU("No tienes suficiente dinero para invertir en I+D."); return; }
+  j.dinero -= costo;
+  fuerzaBaseUnidades += 2;
+  addONU("Has invertido en I+D. Tus unidades ahora son más fuertes.");
+  actualizarHUD();
+}
+
+/* ====== Leyes ====== */
+function establecerLey(ley) {
+  const j = jugadores.find(x => x.nombre === miNombre);
+  
+  implementarLey(j, ley);
+
+  actualizarHUD();
+}
+function implementarLey(jugador, ley) {
+  switch (ley) {
+    case "impuestos altos":
+      jugador.dinero += 2000;
+      ciudades.filter(c => c.propietario === jugador.nombre).forEach(c => {
+          c.poblacion = Math.max(0, (c.poblacion || 0) - 30);
+          c.seguridad = Math.max(0, c.seguridad - 15);
+      });
+      addONU(`${jugador.nombre} ha aprobado una ley de impuestos altos. Ganó dinero pero su población y seguridad están descontentas.`);
+      break;
+    case "impulsar ejercito":
+      fuerzaBaseUnidades += 5;
+      jugador.dinero = Math.max(0, jugador.dinero - 1000);
+      addONU(`${jugador.nombre} ha impulsado su ejército. Sus unidades son más fuertes.`);
+      break;
+    case "paz mundial": // Nueva ley de paz mundial
+      jugadores.forEach(p => {
+        if (p.nombre !== jugador.nombre) {
+          if (!esAliado(jugador.nombre, p.nombre)) {
+            p.solicitudes = p.solicitudes || [];
+            if (!p.solicitudes.includes(jugador.nombre)) {
+              p.solicitudes.push(jugador.nombre);
+              addONU(`${jugador.nombre} ha propuesto una ley de paz mundial, enviando solicitudes de alianza.`);
+            }
+          }
+        }
+      });
+      break;
+    case "gasto social":
+      if (jugador.dinero < 2500) {
+        addONU(`${jugador.nombre} no tiene suficiente dinero para el gasto social.`);
+        return;
+      }
+      jugador.dinero -= 2500;
+      ciudades.filter(c => c.propietario === jugador.nombre).forEach(c => {
+          c.poblacion = Math.min((c.poblacion || 0) + 50, 200);
+          c.seguridad = Math.min(100, c.seguridad + 20);
+      });
+      addONU(`${jugador.nombre} ha invertido en gasto social. Su población está muy feliz.`);
+      break;
+    case "enfocarse en economia":
+      fuerzaBaseUnidades = Math.max(1, fuerzaBaseUnidades - 3);
+      jugador.dinero += 4000;
+      addONU(`${jugador.nombre} se ha enfocado en la economía. Ha ganado dinero pero su ejército se ha debilitado.`);
+      break;
+    case "crear maravilla":
+      if (jugador.dinero < 10000) {
+        addONU(`${jugador.nombre} no tiene suficiente dinero para construir una maravilla.`);
+        return;
+      }
+      jugador.dinero -= 10000;
+      fuerzaBaseUnidades += 15;
+      ciudades.filter(c => c.propietario === jugador.nombre).forEach(c => {
+          c.poblacion = (c.poblacion || 0) + 100;
+      });
+      addONU(`${jugador.nombre} ha construido una gran maravilla! Su ejército y población han mejorado enormemente.`);
+      break;
+    case "espionaje":
+        if (jugador.dinero < 5000) {
+            addONU(`${jugador.nombre} no tiene suficiente dinero para la operación de espionaje.`);
+            return;
+        }
+        jugador.dinero -= 5000;
+        const enemigo = jugadores.find(j => j.nombre !== jugador.nombre && j.nombre !== "Conquistado");
+        if (enemigo) {
+            addONU(`${jugador.nombre} ha espiado a ${enemigo.nombre}. Su dinero es de $${enemigo.dinero.toFixed(2)}, y su fuerza de unidades es de ${enemigo.unidades}.`);
+        } else {
+            addONU(`${jugador.nombre} intentó espiar, pero no hay enemigos. ¡Bien hecho!`);
+        }
+        break;
+    case "investigacion avanzada":
+      if (jugador.dinero < 2000) {
+        addONU(`${jugador.nombre} no tiene suficiente dinero para investigación avanzada.`);
+        return;
+      }
+      jugador.dinero -= 2000;
+      fuerzaBaseUnidades += 3;
+      addONU(`${jugador.nombre} ha invertido en investigación avanzada. La fuerza de unidades ha aumentado.`);
+      break;
+    case "construir infraestructura":
+      if (jugador.dinero < 1500) {
+        addONU(`${jugador.nombre} no tiene suficiente dinero para construir infraestructura.`);
+        return;
+      }
+      jugador.dinero -= 1500;
+      ciudades.filter(c => c.propietario === jugador.nombre).forEach(c => {
+          c.edificios = (c.edificios || 0) + 1;
+      });
+      addONU(`${jugador.nombre} ha construido infraestructura. Los edificios han aumentado.`);
+      break;
+    case "reclutamiento masivo":
+      if (jugador.dinero < 1500) {
+        addONU(`${jugador.nombre} no tiene suficiente dinero para reclutamiento masivo.`);
+        return;
+      }
+      jugador.dinero -= 1500;
+      jugador.unidades = (jugador.unidades || 0) + 2;
+      addONU(`${jugador.nombre} ha realizado reclutamiento masivo. Las unidades han aumentado.`);
+      break;
+    default:
+      addONU(`Esa ley no es válida para ${jugador.nombre}.`);
+  }
+}
+
+/* ====== Mercado Financiero ====== */
+function abrirMercado() { document.getElementById("mercadoModal").style.display = "flex"; }
+function cerrarMercado() { document.getElementById("mercadoModal").style.display = "none"; }
+function simularMercado() {
+  if (!isPlaying) return;
+  const nuevaVariacion = (Math.random() - 0.5) * 2 * stock.fluctuacion;
+  stock.precio = Math.max(10, stock.precio + stock.precio * nuevaVariacion);
+  stock.historico.push(stock.precio);
+  if (stock.historico.length > 50) stock.historico.shift();
+
+  mercadoCtx.clearRect(0, 0, mercadoCanvas.width, mercadoCanvas.height);
+  mercadoCtx.fillStyle = varColor('--graph-bg');
+  mercadoCtx.fillRect(0, 0, mercadoCanvas.width, mercadoCanvas.height);
+  mercadoCtx.beginPath();
+  mercadoCtx.strokeStyle = varColor('--graph-line');
+  mercadoCtx.lineWidth = 2;
+  const maxPrice = Math.max(...stock.historico);
+  const minPrice = Math.min(...stock.historico);
+  const range = maxPrice - minPrice;
+  stock.historico.forEach((p, i) => {
+    const x = i * (mercadoCanvas.width / stock.historico.length);
+    const y = range > 0 ? mercadoCanvas.height - ((p - minPrice) / range) * mercadoCanvas.height : mercadoCanvas.height / 2;
+    if (i === 0) mercadoCtx.moveTo(x, y);
+    else mercadoCtx.lineTo(x, y);
+  });
+  mercadoCtx.stroke();
+
+  document.getElementById("precioAccion").textContent = stock.precio.toFixed(2);
+  document.getElementById("misAcciones").textContent = stock.misAcciones;
+  document.getElementById("costoAccionCompra").textContent = stock.precio.toFixed(2);
+  document.getElementById("costoAccionVenta").textContent = stock.precio.toFixed(2);
+}
+function varColor(variable) { return getComputedStyle(document.documentElement).getPropertyValue(variable).trim(); }
+function comprarAcciones() {
+  const j = jugadores.find(x => x.nombre === miNombre);
+  const costo = stock.precio;
+  if (j.dinero < costo) { addONU("No tienes suficiente dinero."); return; }
+  j.dinero -= costo;
+  stock.misAcciones += 1;
+  addONU(`Compraste una acción por $${costo.toFixed(2)}.`);
+  actualizarHUD();
+}
+function venderAcciones() {
+  const j = jugadores.find(x => x.nombre === miNombre);
+  if (stock.misAcciones <= 0) { addONU("No tienes acciones para vender."); return; }
+  const ganancia = stock.precio;
+  j.dinero += ganancia;
+  stock.misAcciones -= 1;
+  addONU(`Vendiste una acción por $${ganancia.toFixed(2)}.`);
+  actualizarHUD();
+}
+
+/* ====== Info / Guerra ====== */
+function verCiudad() {
+  const paisNombre = document.getElementById("paisesEnemigos").value;
+  const ciudadNombre = document.getElementById("ciudadesEnemigas").value;
+  
+  if (!paisNombre || !ciudadNombre || paisNombre === "¡No hay enemigos!") {
+      document.getElementById("infoPais").innerHTML = "Selecciona un país y una ciudad.";
+      return;
+  }
+  
+  const ciudad = ciudades.find(c => c.nombre === ciudadNombre && c.propietario === paisNombre);
+  const j = jugadores.find(j => j.nombre === paisNombre);
+
+  if (!ciudad || !j) {
+      document.getElementById("infoPais").innerHTML = "Selecciona una ciudad válida.";
+      return;
+  }
+  const aliado = esAliado(miNombre, j.nombre) ? "Sí" : "No";
+  document.getElementById("infoPais").innerHTML =
+    `Ciudad: <b>${ciudad.nombre}</b><br>
+     País: <b>${j.nombre}</b><br>
+     Población: ${Math.floor(ciudad.poblacion || 0)}<br>
+     Edificios: ${ciudad.edificios || 0}<br>
+     Seguridad: ${Math.floor(ciudad.seguridad || 0)}%<br>
+     Es aliado: ${aliado}`;
+}
+
+// Función principal para manejar los ataques del jugador y los contraataques de la IA
+function atacarCiudad() {
+  const enemigoPaisNombre = document.getElementById("paisesEnemigos").value;
+  const ciudadNombre = document.getElementById("ciudadesEnemigas").value;
+
+  if (!enemigoPaisNombre || !ciudadNombre) { addONU("Selecciona un país y una ciudad para atacar."); return; }
+  
+  const yo = jugadores.find(j => j.nombre === miNombre);
+  const en = jugadores.find(j => j.nombre === enemigoPaisNombre);
+  const ciudad = ciudades.find(c => c.nombre === ciudadNombre && c.propietario === enemigoPaisNombre);
+
+  if (!yo || !en || !ciudad) {
+      addONU("Error: Ciudad o país no encontrados.");
+      return;
+  }
+
+  if (enemigoPaisNombre === miNombre) { addONU("No puedes atacar una ciudad de tu propio país."); return; }
+  if (esAliado(miNombre, enemigoPaisNombre)) { 
+      romperAlianza(miNombre, enemigoPaisNombre);
+      addONU(`${miNombre} rompió su alianza con ${enemigoPaisNombre} para atacar.`);
+  }
+
+  // Costo del ataque
+  const costoAtaque = 500 + yo.unidades * 10;
+  if (yo.dinero < costoAtaque) {
+    addONU("No tienes suficiente dinero para financiar el ataque.");
+    return;
+  }
+  yo.dinero -= costoAtaque;
+
+  // Ejecutar el ataque del jugador
+  const fuerzaA = getTotalFuerza(yo);
+  const fuerzaD = getTotalFuerza(en) + (ciudad.edificios || 0) * 5;
+  addONU(`${yo.nombre} atacó la ciudad de ${ciudad.nombre} de ${en.nombre}.`);
+
+  setTimeout(() => {
+    if (fuerzaA > fuerzaD) {
+      conquistarCiudad(yo, ciudad);
+    } else {
+      const unidadesPerdidas = Math.ceil((fuerzaD - fuerzaA + 10) / 10);
+      yo.unidades = Math.max(0, (yo.unidades || 0) - unidadesPerdidas);
+      addONU(`${yo.nombre} fue repelido por ${en.nombre} en ${ciudad.nombre}. Perdiste ${unidadesPerdidas} unidades.`);
+    }
+    actualizarHUD();
+
+    // Contraataque de la IA si el atacado no fue conquistado
+    if (en.nombre !== "Conquistado" && !esAliado(yo.nombre, en.nombre)) {
+        setTimeout(() => {
+            const miCiudades = ciudades.filter(c => c.propietario === miNombre);
+            if (miCiudades.length > 0) {
+                const ciudadContraataque = miCiudades[Math.floor(Math.random() * miCiudades.length)];
+                
+                const fuerzaIA = getTotalFuerza(en);
+                const fuerzaTu = getTotalFuerza(yo) + (ciudadContraataque.edificios || 0) * 5;
+                
+                addONU(`${en.nombre} contraataca tu ciudad de ${ciudadContraataque.nombre}!`);
+
+                if (fuerzaIA > fuerzaTu) {
+                    conquistarCiudad(en, ciudadContraataque);
+                } else {
+                    const unidadesPerdidasIA = Math.ceil((fuerzaTu - fuerzaIA + 10) / 10);
+                    en.unidades = Math.max(0, (en.unidades || 0) - unidadesPerdidasIA);
+                    addONU(`${en.nombre} fue repelido por ${yo.nombre}. Perdió ${unidadesPerdidasIA} unidades.`);
+                }
+                actualizarHUD();
+            }
+        }, 2000); // 2 segundos después del primer ataque
+    }
+  }, 1000);
+}
+
+
+function conquistarCiudad(ganador, ciudad) {
+    const perdedor = jugadores.find(j => j.nombre === ciudad.propietario);
+    if (!perdedor) return;
+
+    // Cambiar la propiedad de la ciudad
+    ciudad.propietario = ganador.nombre;
+    ciudad.seguridad = 100;
+
+    addONU(`¡${ganador.nombre} conquistó la ciudad de ${ciudad.nombre} de ${perdedor.nombre}!`);
+
+    // Actualizar la lista de ciudades de los jugadores
+    perdedor.ciudades = perdedor.ciudades || [];
+    perdedor.ciudades = perdedor.ciudades.filter(c => c !== ciudad.nombre);
+    ganador.ciudades = ganador.ciudades || [];
+    ganador.ciudades.push(ciudad.nombre);
+
+    if (perdedor.ciudades.length === 0) {
+        addONU(`¡${perdedor.nombre} ha sido completamente conquistado por ${ganador.nombre}!`);
+        const nombreOriginal = perdedor.nombre;
+        perdedor.nombre = "Conquistado";
+        perdedor.isRobot = false;
+        if (nombreOriginal === miNombre) {
+            romperTodasMisAlianzas(false);
+            gameOver();
+        }
+    }
+    romperAlianza(ganador.nombre, perdedor.nombre);
+
+    checkEndGameCondition();
+    populateEnemyCountriesDropdown();
+    actualizarHUD();
+    drawMap(); // Vuelve a dibujar el mapa para mostrar el cambio
+}
+
+function checkEndGameCondition() {
+    const jugadoresActivos = jugadores.filter(j => j.nombre !== "Conquistado");
+    const yo = jugadoresActivos.find(j => j.nombre === miNombre);
+    const enemigosRestantes = jugadoresActivos.filter(j => j.nombre !== miNombre);
+
+    // FIX: Verificar si el jugador ya no existe en la lista de jugadores activos (fue conquistado)
+    if (!yo) {
+        gameOver();
+        return;
+    }
+    if (enemigosRestantes.length === 0) {
+        gameWin();
+    }
+}
+function gameOver() {
+    isPlaying = false;
+    document.getElementById("panelPrincipal").style.display = "none";
+    document.getElementById("panelSecundario").style.display = "none";
+    document.getElementById("gameOverModal").style.display = "flex";
+    document.getElementById("gameOverMessage").textContent = "¡Has sido conquistado! Todas tus ciudades han caído en manos enemigas.";
+}
+function gameWin() {
+    isPlaying = false;
+    // Otorgar monedas por victoria
+    monedasVirtuales += 100;
+    localStorage.setItem('bancoMaxMonedas', monedasVirtuales.toString());
+    actualizarContadorMonedas();
+    
+    document.getElementById("panelPrincipal").style.display = "none";
+    document.getElementById("panelSecundario").style.display = "none";
+    document.getElementById("gameWinModal").style.display = "flex";
+}
+
+/* ====== Alianzas ====== */
+function esAliado(a, b) {
+  const A = jugadores.find(j => j.nombre === a);
+  return A && (A.aliados || []).includes(b);
+}
+function romperAlianza(a, b) {
+    const A = jugadores.find(j => j.nombre === a);
+    const B = jugadores.find(j => j.nombre === b);
+    if (A && B) {
+        A.aliados = (A.aliados || []).filter(aliado => aliado !== b);
+        B.aliados = (B.aliados || []).filter(aliado => aliado !== a);
+    }
+    actualizarHUD();
+}
+function pedirAlianza() {
+  const destinoPais = document.getElementById("paisesEnemigos").value;
+  if (!destinoPais) { addONU("Selecciona un país para pedir una alianza."); return; }
+  
+  if (destinoPais === miNombre) { addONU("No puedes pedirte alianza a ti mismo."); return; }
+  if (esAliado(miNombre, destinoPais)) { addONU("Ya son aliados."); return; }
+  const J = jugadores.find(j => j.nombre === destinoPais);
+  if (!J) return;
+  J.solicitudes = J.solicitudes || [];
+  if (J.solicitudes.includes(miNombre)) { addONU("Solicitud ya enviada."); return; }
+  J.solicitudes.push(miNombre);
+  addONU(`${miNombre} pidió alianza a ${destinoPais}.`);
+  actualizarHUD();
+}
+function verSolicitudes() {
+  const yo = jugadores.find(j => j.nombre === miNombre);
+  const sol = yo.solicitudes || [];
+  const lista = document.getElementById("listaSolicitudes");
+  lista.innerHTML = '';
+  if (sol.length === 0) {
+    lista.innerHTML = '<p>No tienes solicitudes de alianza pendientes.</p>';
+  } else {
+    sol.forEach(solicitante => {
+      const div = document.createElement('div');
+      div.style.marginBottom = '10px';
+      div.innerHTML = `<p>${solicitante} te propone una alianza.</p>`;
+      const btnAceptar = createButton("Aceptar", () => {
+        aceptarAlianza(yo.nombre, solicitante);
+        yo.solicitudes = yo.solicitudes.filter(s => s !== solicitante);
+        addONU(`Aceptaste la alianza con ${solicitante}.`);
+        verSolicitudes();
+      });
+      const btnRechazar = createButton("Rechazar", () => {
+        yo.solicitudes = yo.solicitudes.filter(s => s !== solicitante);
+        addONU(`Rechazaste la alianza con ${solicitante}.`);
+        verSolicitudes();
+      });
+      btnAceptar.className += " ok";
+      btnRechazar.className += " warn";
+      div.appendChild(btnAceptar);
+      div.appendChild(btnRechazar);
+      lista.appendChild(div);
+    });
+  }
+  document.getElementById("solicitudesModal").style.display = 'flex';
+}
+function cerrarSolicitudes() { document.getElementById("solicitudesModal").style.display = 'none'; }
+function aceptarAlianza(a, b) {
+  const A = jugadores.find(j => j.nombre === a);
+  const B = jugadores.find(j => j.nombre === b);
+  if (!A || !B) return;
+  A.aliados = A.aliados || []; B.aliados = B.aliados || [];
+  if (!A.aliados.includes(b)) A.aliados.push(b);
+  if (!B.aliados.includes(a)) B.aliados.push(a);
+  addONU(`¡${A.nombre} y ${B.nombre} han formado una alianza!`);
+  actualizarHUD();
+}
+function romperTodasMisAlianzas(anunciar) {
+  const yo = jugadores.find(j => j.nombre === miNombre);
+  yo.aliados = (yo.aliados || []);
+  const antiguos = [...yo.aliados];
+  antiguos.forEach(nombre => {
+    const otro = jugadores.find(j => j.nombre === nombre);
+    if (otro && otro.aliados) otro.aliados = otro.aliados.filter(a => a !== miNombre);
+  });
+  yo.aliados = [];
+  if (anunciar && antiguos.length > 0) addONU(`${miNombre} rompió todas sus alianzas.`);
+  actualizarHUD();
+}
+
+/* ====== IA Robots ====== */
+function eventosAleatorios() {
+  if (!isPlaying) return;
+  jugadores.filter(j => j.isRobot && j.nombre !== "Conquistado").forEach(R => {
+    
+    // Lógica para que la IA tome decisiones estratégicas más agresivas
+    const miFuerza = (jugadores.find(j => j.nombre === miNombre)?.unidades || 0) * fuerzaBaseUnidades;
+    const fuerzaR = (R.unidades || 0) * fuerzaBaseUnidades + (R.edificios || 0) * 5;
+    const ciudadesR = ciudades.filter(c => c.propietario === R.nombre);
+    const ciudadesEnemigas = ciudades.filter(c => c.propietario !== R.nombre && c.propietario !== "Conquistado" && !esAliado(R.nombre, c.propietario));
+    const miCiudadPrincipal = ciudades.find(c => c.propietario === miNombre);
+    
+    // Aumentar la fuerzaIA para espionaje y decisiones más inteligentes
+    R.fuerzaIA = Math.min(100, (R.fuerzaIA || 0) + 2); // Incremento constante de inteligencia
+
+    // Decisiones de construcción
+    if (Math.random() < 0.3) {
+      if (fuerzaR < 3000) { // Si la fuerza es baja, construir unidades
+        const tipo = ['soldado', 'tanque', 'artilleria'][Math.floor(Math.random() * 3)];
+        const costo = (tipo === "soldado") ? 1000 : (tipo === "tanque") ? 3000 : 5000;
+        if (R.dinero >= costo) {
+          R.dinero -= costo;
+          R.unidades++;
+          const ciudad = ciudadesR[Math.floor(Math.random() * ciudadesR.length)];
+          const [x, y] = getRandomPointInPolygon(ciudad.puntos);
+          unidades.push({ x, y, tipo, propietario: R.nombre });
+        }
+      } else if (ciudadesR.length > 0) { // Si la fuerza es alta, construir edificios para economía
+          const tipo = Math.random() < 0.7 ? 'casa' : 'fabrica';
+          const costo = (tipo === "casa") ? 2000 : 4000;
+          if (R.dinero >= costo) {
+            R.dinero -= costo;
+            const ciudad = ciudadesR[Math.floor(Math.random() * ciudadesR.length)];
+            ciudad.edificios++;
+            const [x, y] = getRandomPointInPolygon(ciudad.puntos);
+            construcciones.push({ x, y, tipo, propietario: R.nombre, ciudad: ciudad.nombre });
+          }
+      }
+    }
+
+    // Decisiones sobre leyes
+    if (Math.random() < 0.2) {
+      if (fuerzaR < 1500 && R.dinero > 1500) {
+        implementarLey(R, "impulsar ejercito");
+      } else if (R.dinero < 2000) {
+        implementarLey(R, "enfocarse en economia");
+      } else if (ciudadesR.every(c => c.seguridad < 50) && R.dinero > 2500) {
+        implementarLey(R, "gasto social");
+      } else if (R.dinero > 10000 && fuerzaBaseUnidades < 30) {
+        implementarLey(R, "crear maravilla");
+      } else if (fuerzaR < 2000 && R.dinero > 2000) {
+        implementarLey(R, "investigacion avanzada");
+      } else if (R.dinero > 1500 && Math.random() < 0.5) {
+        implementarLey(R, "construir infraestructura");
+      } else if (R.dinero > 1500 && Math.random() < 0.5) {
+        implementarLey(R, "reclutamiento masivo");
+      }
+    }
+
+    // Ayuda a aliados
+    const aliadosR = R.aliados || [];
+    if (aliadosR.length > 0 && Math.random() < 0.1) {
+      const aliado = aliadosR[Math.floor(Math.random() * aliadosR.length)];
+      const aliadoJug = jugadores.find(j => j.nombre === aliado);
+      if (aliadoJug && R.dinero > 1000 && aliadoJug.dinero < 2000) {
+        R.dinero -= 500;
+        aliadoJug.dinero += 500;
+        addONU(`${R.nombre} donó $500 a ${aliadoJug.nombre}.`);
+      } else if (aliadoJug && R.unidades > 1 && aliadoJug.unidades < 2) {
+        R.unidades -= 1;
+        aliadoJug.unidades = (aliadoJug.unidades || 0) + 1;
+        addONU(`${R.nombre} donó una unidad a ${aliadoJug.nombre}.`);
+      }
+    }
+
+    // Lógica de ataque de la IA - Más agresiva pero con protección al inicio
+    const tiempoJuego = (Date.now() - inicioJuego) / 1000; // Tiempo en segundos desde inicio
+    const probabilidadAtaque = Math.min(0.45, 0.05 + (tiempoJuego / 60) * 0.1); // Aumenta gradualmente
+    
+    if (fuerzaR > 1500 && Math.random() < probabilidadAtaque && ciudadesEnemigas.length > 0 && tiempoJuego > 30) {
+        // Priorizar el ataque al jugador humano con mayor probabilidad
+        const objetivoPrincipal = ciudadesEnemigas.filter(c => c.propietario === miNombre);
+        // Si el jugador tiene más de una ciudad, atacar la más débil
+        const ciudadObjetivo = objetivoPrincipal.length > 0 ? 
+            objetivoPrincipal.sort((a, b) => a.edificios - b.edificios)[0] : 
+            ciudadesEnemigas[Math.floor(Math.random() * ciudadesEnemigas.length)];
+        const paisObjetivo = jugadores.find(j => j.nombre === ciudadObjetivo.propietario);
+
+        if (esAliado(R.nombre, paisObjetivo.nombre)) {
+            romperAlianza(R.nombre, paisObjetivo.nombre);
+        }
+
+        const fuerzaA = getTotalFuerza(R);
+        const fuerzaD = getTotalFuerza(paisObjetivo) + (ciudadObjetivo.edificios || 0) * 5;
+        
+        addONU(`${R.nombre} atacó la ciudad de ${ciudadObjetivo.nombre} de ${paisObjetivo.nombre}.`);
+
+        setTimeout(() => {
+          if (fuerzaA > fuerzaD) {
+            conquistarCiudad(R, ciudadObjetivo);
+          } else {
+            const unidadesPerdidas = Math.ceil((fuerzaD - fuerzaA + 10) / 10);
+            R.unidades = Math.max(0, (R.unidades || 0) - unidadesPerdidas);
+            addONU(`${R.nombre} fue repelido por ${paisObjetivo.nombre} en ${ciudadObjetivo.nombre}. Perdió ${unidadesPerdidas} unidades.`);
+          }
+          actualizarHUD();
+        }, 1000);
+    }
+    
+    const aliadosActuales = R.aliados || [];
+    if (aliadosActuales.length === 0 && fuerzaR < 2500 && Math.random() < 0.2) {
+      const posibleAliado = jugadores.find(j => j.nombre !== R.nombre && j.nombre !== "Conquistado" && !esAliado(R.nombre, j.nombre));
+      if (posibleAliado) {
+        posibleAliado.solicitudes = posibleAliado.solicitudes || [];
+        if (!posibleAliado.solicitudes.includes(R.nombre)) {
+          posibleAliado.solicitudes.push(R.nombre);
+          addONU(`${R.nombre} envió una solicitud de alianza a ${posibleAliado.nombre}.`);
+        }
+      }
+    }
+  });
+  // Eventos aleatorios adicionales
+  if (Math.random() < 0.1) {
+    // Crisis económica aleatoria
+    const paisAfectado = jugadores[Math.floor(Math.random() * jugadores.length)];
+    if (paisAfectado && paisAfectado.nombre !== "Conquistado") {
+      const perdida = Math.floor(paisAfectado.dinero * 0.15);
+      if (perdida > 0) {
+        paisAfectado.dinero -= perdida;
+        addONU(`Crisis económica en ${paisAfectado.nombre}: Perdió $${perdida}.`);
+      }
+    }
+  }
+  
+  if (Math.random() < 0.05) {
+    // Desastre natural
+    const ciudadesDisponibles = ciudades.filter(c => c.propietario !== "Conquistado");
+    if (ciudadesDisponibles.length > 0) {
+      const ciudadAfectada = ciudadesDisponibles[Math.floor(Math.random() * ciudadesDisponibles.length)];
+      const dañoEdificios = Math.min(ciudadAfectada.edificios, Math.ceil(Math.random() * 2));
+      if (dañoEdificios > 0) {
+        ciudadAfectada.edificios -= dañoEdificios;
+        addONU(`Desastre natural en ${ciudadAfectada.nombre} de ${ciudadAfectada.propietario}: Perdió ${dañoEdificios} edificios.`);
+      }
+    }
+  }
+  
+  // Recursos aleatorios
+  if (recursos.filter(r => r.activo).length < 15 && Math.random() < 0.5) {
+    const tipoRecurso = Math.random() < 0.8 ? "oro" : "diamante";
+    const valorBase = tipoRecurso === "oro" ? 900 : 2000;
+    recursos.push({ 
+      x: 80 + Math.random() * 1040, 
+      y: 80 + Math.random() * 560, 
+      tipo: tipoRecurso, 
+      valor: valorBase + Math.floor(Math.random() * valorBase), 
+      activo: true 
+    });
+  }
+}
+
+/* ====== ONU / Loop ====== */
+function addONU(msg) {
+  const box = document.getElementById("mensajesONU");
+  const p = document.createElement("p");
+  const ts = new Date().toLocaleTimeString();
+  p.textContent = `[${ts}] ${msg}`;
+  box.appendChild(p);
+  box.scrollTop = box.scrollHeight;
+}
+function gameLoop() {
+  if (ctx) {
+    drawMap(); 
+    drawRecursos(); 
+    drawConstrucciones(); 
+    drawUnidades();
+    drawProyectiles(); 
+    drawExplosiones();
+    
+    // Añadir indicador de dificultad
+    ctx.fillStyle = "rgba(255,255,255,0.9)";
+    ctx.font = "14px Arial";
+    ctx.fillText(`Dificultad: Alta | Países: ${Object.keys(mapaData).length} | Alianzas activas: ${jugadores.reduce((total, j) => total + (j.aliados?.length || 0), 0)} | Zoom: ${(mapScale * 100).toFixed(0)}%`, 10, 20);
+    
+    // Mostrar tiempo restante del período de gracia
+    const tiempoJuego = (Date.now() - inicioJuego) / 1000; // Tiempo en segundos desde inicio
+    if (tiempoJuego < 30) {
+      const tiempoRestante = Math.ceil(30 - tiempoJuego);
+      ctx.fillStyle = "rgba(76, 175, 80, 0.9)";
+      ctx.font = "bold 16px Arial";
+      ctx.fillText(`🛡️ Período de gracia: ${tiempoRestante}s`, 10, 50);
+    }
+  }
+  
+  if (isPlaying) {
+    animationFrameId = requestAnimationFrame(gameLoop);
+  }
+}
+
+/* ====== Controles del mapa */
+  if (tiempoJuego < 30) {
+    const tiempoRestante = Math.ceil(30 - tiempoJuego);
+    ctx.fillStyle = "rgba(76, 175, 80, 0.9)";
+    ctx.font = "bold 16px Arial";
+    ctx.fillText(`🛡️ Período de gracia: ${tiempoRestante}s`, 10, 50);
+  }
+  
+  if (isPlaying) {
+    animationFrameId = requestAnimationFrame(gameLoop);
+  }
+}
+
+/* ====== Controles del mapa ====== */
+function initMapControls() {
+  if (!canvas || !ctx) return;
+  // Controles de zoom
+  document.getElementById('zoomIn').addEventListener('click', () => {
+    mapScale = Math.min(5, mapScale + 0.3);
+    updateMapInfo();
+  });
+
+  document.getElementById('zoomOut').addEventListener('click', () => {
+    mapScale = Math.max(0.2, mapScale - 0.3);
+    updateMapInfo();
+  });
+
+  document.getElementById('resetView').addEventListener('click', () => {
+    mapOffsetX = -150; // Centrar el mapa mundial
+    mapOffsetY = -180;
+    mapScale = 0.72; // Vista más amplia inicialmente
+    updateMapInfo();
+  });
+
+  // Control de arrastre del mapa - Mejorado para fluidez
+  let isDragging = false;
+  let dragStartX = 0;
+  let dragStartY = 0;
+  let lastOffsetX = 0;
+  let lastOffsetY = 0;
+
+  canvas.addEventListener('mousedown', e => {
+    if (e.button === 0) { // Solo botón izquierdo
+      isDragging = true;
+      const rect = canvas.getBoundingClientRect();
+      dragStartX = e.clientX - rect.left;
+      dragStartY = e.clientY - rect.top;
+      lastOffsetX = mapOffsetX;
+      lastOffsetY = mapOffsetY;
+      canvas.style.cursor = 'grabbing';
+      e.preventDefault();
+    }
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (isDragging) {
+      const rect = canvas.getBoundingClientRect();
+      const currentX = e.clientX - rect.left;
+      const currentY = e.clientY - rect.top;
+      mapOffsetX = lastOffsetX + (currentX - dragStartX);
+      mapOffsetY = lastOffsetY + (currentY - dragStartY);
+      e.preventDefault();
+    }
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (isDragging) {
+      isDragging = false;
+      canvas.style.cursor = 'grab';
+    }
+  });
+
+  canvas.addEventListener('mouseleave', () => {
+    isDragging = false;
+    canvas.style.cursor = 'grab';
+  });
+
+  // Control de zoom con rueda del mouse - Más fluido
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+
+    // Calcular punto del mundo antes del zoom
+    const worldX = (mouseX - mapOffsetX) / mapScale;
+    const worldY = (mouseY - mapOffsetY) / mapScale;
+
+    // Cambiar escala con incrementos más suaves
+    const zoomFactor = e.deltaY > 0 ? 0.85 : 1.15;
+    const newScale = Math.max(0.2, Math.min(5, mapScale * zoomFactor));
+
+    // Ajustar offset para mantener el punto bajo el mouse
+    mapOffsetX = mouseX - worldX * newScale;
+    mapOffsetY = mouseY - worldY * newScale;
+    mapScale = newScale;
+    updateMapInfo();
+  });
+
+  // Actualizar información del mapa
+  function updateMapInfo() {
+    const info = document.getElementById('mapInfo');
+    if (info) {
+      info.textContent = `Zoom: ${(mapScale * 100).toFixed(0)}% | Pos: (${Math.round(mapOffsetX)}, ${Math.round(mapOffsetY)})`;
+    }
+  }
+
+  // Control con teclado - Más sensible
+  document.addEventListener('keydown', e => {
+    if (!isPlaying) return;
+    const moveAmount = 30; // Movimiento más suave
+
+    switch(e.key) {
+      case 'ArrowUp':
+        mapOffsetY += moveAmount;
+        updateMapInfo();
+        break;
+      case 'ArrowDown':
+        mapOffsetY -= moveAmount;
+        updateMapInfo();
+        break;
+      case 'ArrowLeft':
+        mapOffsetX += moveAmount;
+        updateMapInfo();
+        break;
+      case 'ArrowRight':
+        mapOffsetX -= moveAmount;
+        updateMapInfo();
+        break;
+      case '+':
+      case '=':
+        mapScale = Math.min(5, mapScale + 0.2);
+        updateMapInfo();
+        break;
+      case '-':
+        mapScale = Math.max(0.2, mapScale - 0.2);
+        updateMapInfo();
+        break;
+      case '0':
+        mapOffsetX = -150;
+        mapOffsetY = -180;
+        mapScale = 0.72;
+        updateMapInfo();
+        break;
+    }
+    e.preventDefault();
+  });
+
+  // Eventos para actualizar la info del mapa
+  canvas.addEventListener('wheel', () => updateMapInfo());
+  canvas.addEventListener('mouseup', () => updateMapInfo());
+
+  // Establecer vista inicial centrada
+  mapOffsetX = -150;
+  mapOffsetY = -180;
+  mapScale = 0.72;
+  updateMapInfo();
+}
+
+/* ====== Click: recoger recursos ====== */
+if (canvas) {
+  canvas.addEventListener('click', e => {
+    if (!isPlaying || isDragging) return;
+    const rect = canvas.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const clickY = e.clientY - rect.top;
+    
+    // Convertir coordenadas del clic a coordenadas del mapa
+    const mapX = (clickX - mapOffsetX) / mapScale;
+    const mapY = (clickY - mapOffsetY) / mapScale;
+    
+    const r = recursos.find(r => r.activo && Math.hypot(r.x - mapX, r.y - mapY) < 15);
+    if (r) {
+    const yo = jugadores.find(j => j.nombre === miNombre);
+    yo.dinero += r.valor;
+    r.activo = false;
+    
+    // Mensaje según tipo de recurso
+    if (r.tipo === "diamante") {
+      addONU(`¡Encontraste un diamante valioso! +$${r.valor}.`);
+    } else {
+      addONU(`Recolectaste oro por $${r.valor}.`);
+    }
+    
+    // Posibilidad de emboscada al recoger recursos
+    if (Math.random() < 0.15) {
+      const enemigo = jugadores.find(j => j.isRobot && j.nombre !== "Conquistado" && !esAliado(miNombre, j.nombre));
+      if (enemigo && enemigo.unidades > 0) {
+        enemigo.unidades--;
+        yo.unidades = Math.max(0, yo.unidades - 1);
+        addONU(`¡Emboscada! ${enemigo.nombre} te atacó mientras recogías recursos. Perdiste 1 unidad.`);
+      }
+    }
+    
+    actualizarHUD();
+  }
+});
+
+function reiniciarPartida() {
+  location.reload();
+}
+function createButton(text, onclick) {
+    const btn = document.createElement("button");
+    btn.textContent = text;
+    btn.className = "btn";
+    btn.onclick = onclick;
+    return btn;
+}
+
+function abrirModalAyuda() {
+  document.getElementById("ayudaModal").style.display = "flex";
+  populateAyudaDropdown();
+}
+
+function populateAyudaDropdown() {
+  const select = document.getElementById("paisAyuda");
+  select.innerHTML = "";
+  const yo = jugadores.find(j => j.nombre === miNombre);
+  const aliados = yo.aliados || [];
+  if (aliados.length === 0) {
+    const option = document.createElement("option");
+    option.textContent = "No tienes aliados";
+    select.appendChild(option);
+    return;
+  }
+  aliados.forEach(a => {
+    const option = document.createElement("option");
+    option.value = a;
+    option.textContent = a;
+    select.appendChild(option);
+  });
+}
+
+function donarDinero(cantidad) {
+  const pais = document.getElementById("paisAyuda").value;
+  if (!pais || pais === "No tienes aliados") return;
+  const yo = jugadores.find(j => j.nombre === miNombre);
+  const aliado = jugadores.find(j => j.nombre === pais);
+  if (yo.dinero < cantidad) { addONU("No tienes suficiente dinero."); return; }
+  yo.dinero -= cantidad;
+  aliado.dinero += cantidad;
+  addONU(`${yo.nombre} donó $${cantidad} a ${aliado.nombre}.`);
+  actualizarHUD();
+}
+
+function donarUnidad() {
+  const pais = document.getElementById("paisAyuda").value;
+  if (!pais || pais === "No tienes aliados") return;
+  const yo = jugadores.find(j => j.nombre === miNombre);
+  const aliado = jugadores.find(j => j.nombre === pais);
+  if (yo.unidades < 1) { addONU("No tienes unidades para donar."); return; }
+  yo.unidades -= 1;
+  aliado.unidades = (aliado.unidades || 0) + 1;
+  addONU(`${yo.nombre} donó una unidad a ${aliado.nombre}.`);
+  actualizarHUD();
+}
+
+function cerrarAyuda() {
+  document.getElementById("ayudaModal").style.display = "none";
+}
+
+// Sistema de monedas virtuales
+let monedasVirtuales = parseInt(localStorage.getItem('bancoMaxMonedas')) || 0;
+let mejoras = JSON.parse(localStorage.getItem('bancoMaxMejoras')) || {
+  inicioRapido: false,
+  economiaPlus: false,
+  diplomatico: false,
+  estratega: false,
+  conquistador: false
+};
+
+/* ====== Sistema de Monedas y Tienda ====== */
+function actualizarContadorMonedas() {
+  document.getElementById("contadorMonedas").textContent = monedasVirtuales;
+  document.getElementById("monedasBoton").textContent = monedasVirtuales;
+  if (document.getElementById("monedasTienda")) {
+    document.getElementById("monedasTienda").textContent = monedasVirtuales;
+  }
+}
+
+function abrirTienda() {
+  document.getElementById("tiendaModal").style.display = "flex";
+  actualizarContadorMonedas();
+  actualizarBotonesTienda();
+}
+
+function cerrarTienda() {
+  document.getElementById("tiendaModal").style.display = "none";
+}
+
+function actualizarBotonesTienda() {
+  const botones = {
+    'inicioRapido': document.getElementById('btnInicioRapido'),
+    'economiaPlus': document.getElementById('btnEconomiaPlus'),
+    'diplomatico': document.getElementById('btnDiplomatico'),
+    'estratega': document.getElementById('btnEstratega'),
+    'conquistador': document.getElementById('btnConquistador')
+  };
+  
+  Object.keys(botones).forEach(mejora => {
+    if (mejoras[mejora]) {
+      botones[mejora].textContent = "✅ Comprado";
+      botones[mejora].disabled = true;
+      botones[mejora].style.opacity = "0.6";
+    }
+  });
+}
+
+function comprarMejora(tipo, precio) {
+  if (mejoras[tipo]) {
+    alert('Ya tienes esta mejora!');
+    return;
+  }
+  
+  if (monedasVirtuales < precio) {
+    alert(`Necesitas ${precio} monedas. Tienes ${monedasVirtuales}.`);
+    return;
+  }
+  
+  monedasVirtuales -= precio;
+  mejoras[tipo] = true;
+  localStorage.setItem('bancoMaxMonedas', monedasVirtuales.toString());
+  localStorage.setItem('bancoMaxMejoras', JSON.stringify(mejoras));
+  
+  actualizarContadorMonedas();
+  actualizarBotonesTienda();
+  
+  const mensajes = {
+    'inicioRapido': '¡Mejora comprada! Ahora comenzarás con dinero extra.',
+    'economiaPlus': '¡Mejora comprada! Tus ingresos serán 25% mayores.',
+    'diplomatico': '¡Mejora comprada! Las alianzas se formarán automáticamente.',
+    'estratega': '¡Mejora comprada! Ahora puedes ver todas las estadísticas.',
+    'conquistador': '¡Mejora comprada! Tus ataques serán 20% más fuertes.'
+  };
+  
+  addONU(mensajes[tipo]);
+  
+  // Aplicar mejoras inmediatamente si el juego está activo
+  if (isPlaying) {
+    aplicarMejoras();
+  }
+}
+
+function aplicarMejoras() {
+  const yo = jugadores.find(j => j.nombre === miNombre);
+  if (!yo) return;
+  
+  if (mejoras.inicioRapido) {
+    yo.dinero += 2000; // Bonus inmediato
+  }
+  
+  if (mejoras.economiaPlus) {
+    // Se aplica en tickEconomia
+  }
+  
+  if (mejoras.diplomatico) {
+    // Se aplica en eventosAleatorios
+  }
+  
+  if (mejoras.estratega) {
+    // Se aplica en actualizarHUD
+  }
+  
+  if (mejoras.conquistador) {
+    // Se aplica en getTotalFuerza
+  }
+  
+  actualizarHUD();
+}
+
+/* ====== Mejoras aplicadas en el juego ====== */
+function tickEconomia() {
+  if (!isPlaying) return;
+  jugadores.forEach(j => {
+    if (j.nombre === "Conquistado") return;
+
+    let totalPoblacion = 0;
+    let totalEdificios = 0;
+    let seguridadTotal = 0;
+
+    ciudades.filter(c => c.propietario === j.nombre).forEach(c => {
+        totalPoblacion += c.poblacion || 0;
+        totalEdificios += c.edificios || 0;
+        seguridadTotal += c.seguridad || 0;
+        // La seguridad de cada ciudad disminuye gradualmente
+        c.seguridad = Math.max(0, c.seguridad - 0.5);
+    });
+    
+    // Check for rebellion
+    ciudades.filter(c => c.propietario === j.nombre).forEach(c => {
+        if (c.seguridad < 20 && Math.random() < 0.1) {
+            c.propietario = "Conquistado";
+            c.seguridad = 100;
+            const perdedor = jugadores.find(p => p.nombre === j.nombre);
+            addONU(`¡Una rebelión ha estallado en ${c.nombre}! Ahora es territorio neutral.`);
+            perdedor.ciudades = perdedor.ciudades.filter(cn => cn !== c.nombre);
+            checkEndGameCondition();
+        }
+    });
+
+    const aliadosCnt = (j.aliados || []).length;
+    const bonus = Math.min(aliadosCnt * 5, 25);
+    let ingresoBase = 160 + (totalEdificios * 70) + (totalPoblacion * 0.5);
+    
+    // Aplicar mejora economía plus
+    if (j.nombre === miNombre && mejoras.economiaPlus) {
+      ingresoBase *= 1.25;
+    }
+    
+    j.dinero += Math.floor(ingresoBase * (1 + bonus / 100));
+    j.poblacion = totalPoblacion;
+    j.edificios = totalEdificios;
+  });
+
+  actualizarHUD();
+}
+
+function getTotalFuerza(jugador) {
+  let total = (jugador.unidades || 0) * fuerzaBaseUnidades;
+  for (let aliado of (jugador.aliados || [])) {
+    let aliadoJug = jugadores.find(j => j.nombre === aliado);
+    if (aliadoJug) total += (aliadoJug.unidades || 0) * fuerzaBaseUnidades;
+  }
+  
+  // Aplicar mejora conquistador
+  if (jugador.nombre === miNombre && mejoras.conquistador) {
+    total *= 1.2;
+  }
+  
+  return total;
+}
+
+function actualizarHUD() {
+  const yo = jugadores.find(j => j.nombre === miNombre);
+  if (!yo) return;
+  if (!yo.aliados) yo.aliados = [];
+  document.getElementById("miDinero").textContent = yo.dinero.toFixed(2);
+  document.getElementById("miPaisNombre").textContent = miNombre;
+  document.getElementById("bonosComercio").textContent = `+${Math.min(yo.aliados.length * 5, 25)}% comercio`;
+  document.getElementById("miPoblacion").textContent = Math.floor(yo.poblacion);
+  
+  // Promedio de seguridad para el HUD
+  const misCiudades = ciudades.filter(c => c.propietario === miNombre);
+  const totalSeguridad = misCiudades.reduce((sum, c) => sum + c.seguridad, 0);
+  const seguridadPromedio = misCiudades.length > 0 ? totalSeguridad / misCiudades.length : 100;
+
+  document.getElementById("seguridadTag").textContent = (seguridadPromedio > 80) ? "Seguridad: Alta" : (seguridadPromedio > 50) ? "Seguridad: Normal" : "Seguridad: Baja";
+  document.getElementById("fuerzaUnidades").textContent = fuerzaBaseUnidades;
+
+  const tbody = document.getElementById("rankingBody");
+  tbody.innerHTML = "";
+  const rankingJugadores = jugadores.filter(j => j.nombre !== "Conquistado" && !isNaN(j.dinero));
+  rankingJugadores.sort((a, b) => (b.dinero + (b.unidades || 0) * 120 + (b.edificios || 0) * 200 + (b.poblacion || 0) * 50) - (a.dinero + (a.unidades || 0) * 120 + (a.edificios || 0) * 200 + (a.poblacion || 0) * 50))
+    .forEach(j => {
+      const tr = document.createElement("tr");
+      const fuerza = (j.unidades || 0) * fuerzaBaseUnidades;
+      const nombreMostrar = (j.nombre === miNombre) ? "Tú" : j.nombre;
+      
+      // Aplicar mejora estratega
+      if (j.nombre === miNombre && mejoras.estratega) {
+        tr.innerHTML = `<td>${j.nombre} (${nombreMostrar})</td><td>$${j.dinero.toFixed(2)}</td><td>${j.unidades || 0}</td><td>${fuerza}</td><td>${j.edificios || 0}</td><td>${Math.floor(j.poblacion || 0)}</td><td>${(j.aliados || []).length}</td>`;
+      } else if (j.nombre !== miNombre && mejoras.estratega) {
+        tr.innerHTML = `<td>${j.nombre}</td><td>$${j.dinero.toFixed(2)}</td><td>${j.unidades || 0}</td><td>${fuerza}</td><td>${j.edificios || 0}</td><td>${Math.floor(j.poblacion || 0)}</td><td>${(j.aliados || []).length}</td>`;
+      } else {
+        tr.innerHTML = `<td>${j.nombre} (${nombreMostrar})</td><td>$${j.dinero.toFixed(2)}</td><td>${j.unidades || 0}</td><td>${fuerza}</td><td>${j.edificios || 0}</td><td>${Math.floor(j.poblacion || 0)}</td><td>${(j.aliados || []).length}</td>`;
+      }
+      
+      tbody.appendChild(tr);
+    });
+}
+
+/* ====== Tutorial ====== */
+function abrirTutorial() {
+  document.getElementById("tutorialModal").style.display = "flex";
+}
+
+function cerrarTutorial() {
+  document.getElementById("tutorialModal").style.display = "none";
+}
+
+/* ====== Sistema de Calificaciones ====== */
+let calificacionSeleccionada = 0;
+
+function abrirCalificacion() {
+  document.getElementById("calificacionModal").style.display = "flex";
+  calificacionSeleccionada = 0;
+  // Resetear estrellas
+  document.querySelectorAll('.estrella').forEach(e => e.classList.remove('seleccionada'));
+  document.getElementById('enviarCalificacion').style.display = 'none';
+  // Ocultar el texto de calificación
+  document.getElementById('calificacionTexto').style.display = 'none';
+}
+
+function abrirCalificacionDesdeVictoria() {
+  abrirCalificacion();
+}
+
+function cerrarCalificacion() {
+  document.getElementById("calificacionModal").style.display = "none";
+  // Ensure victory or game over modal stays visible after closing rating
+  const gameWinModal = document.getElementById("gameWinModal");
+  const gameOverModal = document.getElementById("gameOverModal");
+  
+  // If either victory or game over modal exists and was visible, show it again
+  if (gameWinModal && gameWinModal.style.display === "none" && !isPlaying) {
+    gameWinModal.style.display = "flex";
+  } else if (gameOverModal && gameOverModal.style.display === "none" && !isPlaying) {
+    gameOverModal.style.display = "flex";
+  }
+}
+
+function seleccionarEstrella(numero) {
+  calificacionSeleccionada = numero;
+  const estrellas = document.querySelectorAll('.estrella');
+  estrellas.forEach((estrella, index) => {
+    if (index < numero) {
+      estrella.classList.add('seleccionada');
+    } else {
+      estrella.classList.remove('seleccionada');
+    }
+  });
+  
+  // Mostrar el número de estrellas seleccionadas
+  document.getElementById('calificacionTexto').style.display = 'block';
+  document.getElementById('numeroEstrellas').textContent = numero;
+  document.getElementById('enviarCalificacion').style.display = 'inline-block';
+}
+
+function enviarCalificacion() {
+  if (calificacionSeleccionada === 0) {
+    alert('Por favor selecciona una calificación primero.');
+    return;
+  }
+  
+  const asunto = `Calificación Banco Max Estrategia: ${calificacionSeleccionada}/10 estrellas`;
+  const cuerpo = `Hola,
+
+He jugado Banco Max Estrategia y le doy una calificación de ${calificacionSeleccionada}/10 estrellas.
+
+Gracias por el juego!`;
+  const mailtoLink = `https://mail.google.com/mail/?view=cm&fs=1&to=Pulguitak976890@gmail.com&su=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
+  
+  window.open(mailtoLink, '_blank');
+  cerrarCalificacion();
+}
+</script>
+
+</body>
+</html>

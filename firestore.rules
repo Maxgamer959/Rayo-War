@@ -1,0 +1,36 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    match /configuracion/estado {
+      allow read, create, update: if isSignedIn();
+    }
+
+    match /naciones/{nationId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.auth.uid == nationId;
+      allow update: if isSignedIn();
+    }
+
+    match /batallas/{battleId} {
+      allow read, create: if isSignedIn();
+    }
+
+    match /alianzas/{allianceId} {
+      allow read, create, update: if isSignedIn();
+    }
+
+    match /chat_global/{messageId} {
+      allow read, create: if isSignedIn();
+    }
+
+    match /chat_alianzas/{messageId} {
+      allow read, create: if isSignedIn();
+    }
+  }
+}
