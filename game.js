@@ -39,6 +39,17 @@ import {
     NUCLEAR_COSTS
 } from "./diplomacy.js";
 import {
+    ensureAdminRegistered,
+    getIsAdmin,
+    banUser,
+    unbanUser,
+    deleteChatMessage,
+    loadAllUsersForAdmin,
+    loadBannedUsers,
+    startBanWatcher,
+    stopBanWatcher
+} from "./admin.js";
+import {
     doc,
     getDoc,
     getDocs,
@@ -148,11 +159,17 @@ function t(key, vars = {}) {
 
 async function handleLogin(e) {
     if (e) e.preventDefault();
+    if (!areRulesAccepted()) {
+        showRulesModal();
+        showAuthMessage("Debes aceptar las reglas antes de entrar.", "error");
+        return;
+    }
     const email = document.getElementById('loginEmail').value;
     const password = document.getElementById('loginPassword').value;
     const result = await loginUser(email, password);
     if (result.success) {
         currentUser = result.uid;
+        await initAdminSession(result.uid, email);
         await loadNationData();
         showGameScreen();
     } else {
@@ -162,6 +179,11 @@ async function handleLogin(e) {
 
 async function handleRegister(e) {
     if (e) e.preventDefault();
+    if (!areRulesAccepted()) {
+        showRulesModal();
+        showAuthMessage("Debes aceptar las reglas antes de registrarte.", "error");
+        return;
+    }
     const email = document.getElementById('registerEmail').value;
     const password = document.getElementById('registerPassword').value;
     const nationName = document.getElementById('registerNationName').value.trim();
@@ -177,12 +199,48 @@ async function handleRegister(e) {
 
     if (result.success) {
         currentUser = result.uid;
+        await initAdminSession(result.uid, email);
         await loadNationData();
         showGameScreen();
         showAuthMessage('¡Nación creada! Bienvenido al campo de batalla.', 'success');
     } else {
         showAuthMessage(result.error, 'error');
     }
+}
+
+function areRulesAccepted() {
+    return document.getElementById("acceptRulesLogin")?.checked
+        || document.getElementById("acceptRulesRegister")?.checked;
+}
+
+function showRulesModal() {
+    const modal = document.getElementById("rulesModal");
+    if (modal) modal.style.display = "flex";
+}
+
+function hideRulesModal() {
+    const modal = document.getElementById("rulesModal");
+    if (modal) modal.style.display = "none";
+}
+
+function acceptRulesFromModal() {
+    const loginCb = document.getElementById("acceptRulesLogin");
+    const regCb = document.getElementById("acceptRulesRegister");
+    if (loginCb) loginCb.checked = true;
+    if (regCb) regCb.checked = true;
+    hideRulesModal();
+}
+
+async function initAdminSession(uid, email) {
+    await ensureAdminRegistered(uid, email || auth.currentUser?.email);
+    const adminBtn = document.getElementById("adminNavBtn");
+    if (adminBtn) adminBtn.style.display = getIsAdmin() ? "block" : "none";
+
+    startBanWatcher(uid, async (banData) => {
+        alert(`⛔ Has sido suspendido permanentemente.\nMotivo: ${banData.razon || "Violación de reglas"}`);
+        await logoutUser();
+        location.reload();
+    });
 }
 
 function showAuthMessage(message, type) {
@@ -198,6 +256,7 @@ function showAuthMessage(message, type) {
 
 async function handleLogout() {
     if (productionInterval) clearInterval(productionInterval);
+    stopBanWatcher();
     await logoutUser();
     location.reload();
 }
@@ -906,11 +965,22 @@ function startChatListener() {
             const m = d.data();
             const div = document.createElement('div');
             div.className = 'chat-msg';
-            div.innerHTML = `<strong>${m.usuario}:</strong> ${m.mensaje}`;
+            const adminBtns = getIsAdmin() ? `
+                <span class="chat-admin-btns">
+                    <button class="btn-chat-del" onclick="handleDeleteChatMsg('${currentChatChannel === 'global' ? 'chat_global' : 'chat_alianzas'}','${d.id}')" title="Borrar">🗑️</button>
+                    ${m.uid ? `<button class="btn-chat-ban" onclick="handleBanFromChat('${m.uid}','${(m.usuario || '').replace(/'/g, '')}')" title="Banear">⛔</button>` : ''}
+                </span>` : '';
+            div.innerHTML = `${adminBtns}<strong>${m.usuario}:</strong> ${escapeHtml(m.mensaje)}`;
             chatBox.appendChild(div);
         });
         chatBox.scrollTop = chatBox.scrollHeight;
     });
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 async function sendChatMessage() {
@@ -922,6 +992,8 @@ async function sendChatMessage() {
     const data = {
         usuario: currentNation.nombre,
         mensaje: msg,
+        uid: currentUser,
+        email: auth.currentUser?.email?.toLowerCase() || "",
         fecha: serverTimestamp()
     };
     if (currentChatChannel === 'alliance') data.alianzaId = currentNation.alianzaId;
@@ -1235,6 +1307,7 @@ function switchTab(tabName) {
     document.querySelectorAll('.nav-btn').forEach(btn => {
         btn.classList.toggle('active', btn.getAttribute('onclick')?.includes(tabName));
     });
+    if (tabName === 'admin') loadAdminPanel();
     if (tabName === 'overview' && map) {
         setTimeout(() => map.invalidateSize(), 200);
     }
@@ -1485,16 +1558,89 @@ async function handleAppealOnu() {
 }
 
 // ======================
+// ADMINISTRACIÓN
+// ======================
+
+async function loadAdminPanel() {
+    if (!getIsAdmin()) return;
+
+    const users = await loadAllUsersForAdmin();
+    const banned = await loadBannedUsers();
+    const bannedIds = new Set(banned.map(b => b.uid));
+
+    const usersList = document.getElementById("adminUsersList");
+    if (usersList) {
+        usersList.innerHTML = users.length ? users.map(u => `
+            <div class="diplo-item">
+                <p><strong>${u.nombre || "?"}</strong> — ${u.email || "sin email"}</p>
+                <p style="font-size:0.8rem;color:#888">UID: ${u.id}</p>
+                ${!bannedIds.has(u.id) && u.id !== currentUser ? `
+                    <button class="btn-danger" onclick="handleBanUser('${u.id}','${(u.nombre || '').replace(/'/g, '')}')">⛔ Banear</button>
+                ` : ''}
+                ${bannedIds.has(u.id) ? '<span style="color:#e74c3c">BANEADO</span>' : ''}
+            </div>
+        `).join("") : "<p class='resource-note'>No hay usuarios registrados aún.</p>";
+    }
+
+    const bannedList = document.getElementById("adminBannedList");
+    if (bannedList) {
+        bannedList.innerHTML = banned.length ? banned.map(b => `
+            <div class="diplo-item">
+                <p><strong>${b.nombre}</strong> — ${b.email}</p>
+                <p>Motivo: ${b.razon}</p>
+                <button onclick="handleUnbanUser('${b.uid}')" class="btn-secondary">🔓 Desbanear</button>
+            </div>
+        `).join("") : "<p class='resource-note'>No hay usuarios baneados.</p>";
+    }
+}
+
+async function handleBanUser(targetUid, targetName) {
+    if (!getIsAdmin()) return;
+    const reason = prompt(`Motivo del ban para ${targetName}:`, "Lenguaje inapropiado en el chat");
+    if (!reason) return;
+    if (!confirm(`¿Banear PERMANENTEMENTE a ${targetName}?\nNo podrá volver con el mismo correo.`)) return;
+
+    const result = await banUser(currentUser, currentNation?.nombre || "Admin", targetUid, reason);
+    alert(result.success
+        ? `⛔ ${result.nombre} (${result.email}) baneado permanentemente.`
+        : result.error);
+    loadAdminPanel();
+}
+
+async function handleBanFromChat(targetUid, targetName) {
+    await handleBanUser(targetUid, targetName);
+}
+
+async function handleUnbanUser(targetUid) {
+    if (!confirm("¿Desbanear a este jugador? Podrá volver a registrarse.")) return;
+    const result = await unbanUser(targetUid);
+    alert(result.success ? "🔓 Usuario desbaneado." : result.error);
+    loadAdminPanel();
+}
+
+async function handleDeleteChatMsg(collectionName, messageId) {
+    const result = await deleteChatMessage(collectionName, messageId);
+    if (!result.success) alert(result.error);
+}
+
+// ======================
 // INICIALIZACIÓN
 // ======================
 
-setupAuthListener((state) => {
+setupAuthListener(async (state) => {
+    if (state.banned) {
+        showAuthScreen();
+        showAuthMessage(state.message, "error");
+        return;
+    }
     if (state.authenticated) {
         currentUser = state.uid;
+        await initAdminSession(state.uid, state.email);
         loadNationData();
         showGameScreen();
     } else {
         showAuthScreen();
+        showRulesModal();
     }
 });
 
@@ -1529,6 +1675,13 @@ window.handleBuildNuke = handleBuildNuke;
 window.handleProposeSanction = handleProposeSanction;
 window.handleVoteOnu = handleVoteOnu;
 window.handleAppealOnu = handleAppealOnu;
+window.showRulesModal = showRulesModal;
+window.acceptRulesFromModal = acceptRulesFromModal;
+window.handleBanUser = handleBanUser;
+window.handleBanFromChat = handleBanFromChat;
+window.handleUnbanUser = handleUnbanUser;
+window.handleDeleteChatMsg = handleDeleteChatMsg;
+window.loadAdminPanel = loadAdminPanel;
 
 window.switchToRegister = (e) => {
     if (e) e.preventDefault();

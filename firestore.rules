@@ -7,18 +7,43 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Contador de usuarios (registro)
+    function adminData() {
+      return get(/databases/$(database)/documents/configuracion/admin).data;
+    }
+
+    function isAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/configuracion/admin)
+        && (
+          request.auth.uid in adminData().uids
+          || request.auth.token.email in adminData().emails
+        );
+    }
+
     match /configuracion/estado {
       allow read, create, update: if isSignedIn();
     }
 
-    // Perfil de usuario (legacy, por si se usa en el futuro)
-    match /usuarios/{userId} {
-      allow read, write: if isSignedIn() && request.auth.uid == userId;
+    match /configuracion/admin {
+      allow read: if isSignedIn();
+      allow create, update: if isAdmin();
     }
 
-    // Naciones: lectura para ranking; creación solo la propia;
-    // update permite batallas (atacante modifica al defensor) sin cambiar id_lider
+    match /configuracion/baneados {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /baneados/{banId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /usuarios/{userId} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+    }
+
     match /naciones/{nationId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn()
@@ -26,18 +51,16 @@ service cloud.firestore {
         && request.resource.data.id_lider == request.auth.uid
         && request.resource.data.dinero >= 0;
       allow update: if isSignedIn()
-        && request.resource.data.id_lider == resource.data.id_lider
+        && (request.resource.data.id_lider == resource.data.id_lider || isAdmin())
         && request.resource.data.dinero >= 0;
       allow delete: if false;
     }
 
-    // Log de batallas (game.js usa "batallas", no "ataques")
     match /batallas/{battleId} {
       allow read, create: if isSignedIn();
       allow update, delete: if false;
     }
 
-    // Legacy: colección antigua de ataques
     match /ataques/{attackId} {
       allow create: if isSignedIn();
       allow update: if isSignedIn()
@@ -50,10 +73,12 @@ service cloud.firestore {
 
     match /chat_global/{messageId} {
       allow read, create: if isSignedIn();
+      allow delete: if isAdmin();
     }
 
     match /chat_alianzas/{messageId} {
       allow read, create: if isSignedIn();
+      allow delete: if isAdmin();
     }
 
     match /alianzas/{alianceId} {

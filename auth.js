@@ -12,11 +12,47 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
 import {
     doc,
+    getDoc,
     setDoc,
     increment,
     runTransaction,
     serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+
+async function isEmailBanned(email) {
+    if (!email) return false;
+    const snap = await getDoc(doc(db, "configuracion", "baneados"));
+    if (!snap.exists()) return false;
+    const emails = (snap.data().emails || []).map(e => e.toLowerCase());
+    return emails.includes(email.toLowerCase());
+}
+
+async function isUidBanned(uid) {
+    if (!uid) return false;
+    const snap = await getDoc(doc(db, "baneados", uid));
+    return snap.exists();
+}
+
+async function checkAndKickBannedUser(uid, email) {
+    const banned = await isUidBanned(uid) || await isEmailBanned(email);
+    if (banned) {
+        await signOut(auth);
+        return {
+            banned: true,
+            message: "Tu cuenta ha sido suspendida permanentemente por violar las reglas de Rayo War."
+        };
+    }
+    return { banned: false };
+}
+
+async function saveUserProfile(uid, email, nationName) {
+    await setDoc(doc(db, "usuarios", uid), {
+        uid,
+        email: email.toLowerCase(),
+        nombre: nationName || "Sin nombre",
+        ultima_conexion: serverTimestamp()
+    }, { merge: true });
+}
 
 function buildInitialNation(uid, nationName, government, territory) {
     return {
@@ -90,7 +126,16 @@ function buildDefeatedNation(uid, previousData, reason, conquerorName) {
 
 async function recreateNation(uid, nationName, government, territory) {
     try {
+        const user = auth.currentUser;
+        if (await isUidBanned(uid) || await isEmailBanned(user?.email)) {
+            return {
+                success: false,
+                error: "Tu cuenta está suspendida. No puedes crear una nueva nación."
+            };
+        }
+
         await setDoc(doc(db, "naciones", uid), buildInitialNation(uid, nationName, government, territory));
+        await saveUserProfile(uid, user?.email, nationName);
         return { success: true, uid };
     } catch (error) {
         console.error("❌ Error recreando nación:", error.message);
@@ -102,8 +147,20 @@ async function registerUser(email, password, nationName, government, territory) 
     let userCredential = null;
 
     try {
+        if (await isEmailBanned(email)) {
+            return {
+                success: false,
+                error: "Este correo está permanentemente suspendido por violar las reglas de Rayo War."
+            };
+        }
+
         userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const uid = userCredential.user.uid;
+
+        const banCheck = await checkAndKickBannedUser(uid, email);
+        if (banCheck.banned) {
+            return { success: false, error: banCheck.message };
+        }
 
         await runTransaction(db, async (transaction) => {
             const configRef = doc(db, "configuracion", "estado");
@@ -124,6 +181,8 @@ async function registerUser(email, password, nationName, government, territory) 
             transaction.set(nationRef, buildInitialNation(uid, nationName, government, territory));
             transaction.update(configRef, { totalUsuarios: increment(1) });
         });
+
+        await saveUserProfile(uid, email, nationName);
 
         return { success: true, uid };
 
@@ -149,7 +208,23 @@ async function registerUser(email, password, nationName, government, territory) 
 
 async function loginUser(email, password) {
     try {
+        if (await isEmailBanned(email)) {
+            return {
+                success: false,
+                error: "Tu cuenta está permanentemente suspendida por violar las reglas de Rayo War."
+            };
+        }
+
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        const banCheck = await checkAndKickBannedUser(userCredential.user.uid, email);
+        if (banCheck.banned) {
+            return { success: false, error: banCheck.message };
+        }
+
+        const nationSnap = await getDoc(doc(db, "naciones", userCredential.user.uid));
+        const nationName = nationSnap.exists() ? nationSnap.data().nombre : "Jugador";
+        await saveUserProfile(userCredential.user.uid, email, nationName);
+
         return { success: true, uid: userCredential.user.uid };
     } catch (error) {
         return { success: false, error: error.message };
@@ -161,9 +236,14 @@ async function logoutUser() {
 }
 
 function setupAuthListener(callback) {
-    onAuthStateChanged(auth, (user) => {
+    onAuthStateChanged(auth, async (user) => {
         if (user) {
-            callback({ authenticated: true, uid: user.uid });
+            const banCheck = await checkAndKickBannedUser(user.uid, user.email);
+            if (banCheck.banned) {
+                callback({ authenticated: false, banned: true, message: banCheck.message });
+                return;
+            }
+            callback({ authenticated: true, uid: user.uid, email: user.email });
         } else {
             callback({ authenticated: false });
         }

@@ -55,6 +55,23 @@
         .defeat-box .form-group { text-align: left; margin: 12px 0; }
         .defeat-box label { display: block; margin-bottom: 4px; color: #bdc3c7; }
         .defeat-box input, .defeat-box select { width: 100%; padding: 10px; background: #2d303e; border: 1px solid #3f445b; color: #fff; border-radius: 6px; }
+
+        /* REGLAS Y ADMIN */
+        .rules-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 10000; align-items: center; justify-content: center; padding: 20px; }
+        .rules-box { background: #1a1c23; border: 2px solid #f39c12; border-radius: 16px; max-width: 620px; width: 100%; max-height: 85vh; overflow-y: auto; padding: 30px; color: #fff; }
+        .rules-box h2 { color: #f39c12; margin-bottom: 15px; }
+        .rules-box h3 { color: #e67e22; margin: 18px 0 8px; font-size: 1rem; }
+        .rules-box ul { padding-left: 20px; color: #bdc3c7; line-height: 1.7; }
+        .rules-box li { margin-bottom: 6px; }
+        .rules-accept-btn { width: 100%; margin-top: 20px; padding: 14px; background: #f39c12; border: none; border-radius: 8px; color: #fff; font-weight: 700; cursor: pointer; font-size: 1rem; }
+        .rules-checkbox { display: flex; align-items: flex-start; gap: 8px; margin: 12px 0; color: #bdc3c7; font-size: 0.9rem; }
+        .rules-checkbox input { margin-top: 3px; }
+        .rules-link { color: #f39c12; cursor: pointer; text-decoration: underline; }
+        .chat-msg { position: relative; }
+        .chat-admin-btns { float: right; display: flex; gap: 4px; }
+        .btn-chat-del, .btn-chat-ban { background: transparent; border: none; cursor: pointer; font-size: 0.85rem; opacity: 0.7; padding: 2px; }
+        .btn-chat-del:hover, .btn-chat-ban:hover { opacity: 1; }
+        #adminNavBtn { display: none; background: #8e44ad !important; border-color: #8e44ad !important; }
     </style>
 </head>
 <body>
@@ -81,6 +98,10 @@
                             <label for="loginPassword">Contraseña</label>
                             <input type="password" id="loginPassword" placeholder="••••••••" required>
                         </div>
+                        <label class="rules-checkbox">
+                            <input type="checkbox" id="acceptRulesLogin" required>
+                            <span>Acepto las <span class="rules-link" onclick="event.preventDefault(); showRulesModal();">reglas del juego, chat y alianzas</span></span>
+                        </label>
                         <button type="submit" class="btn-primary">Entrar al Juego</button>
                     </form>
                     <div class="auth-footer">
@@ -141,6 +162,10 @@
                                 <option value="Arabia Saudita">🇸🇦 Arabia Saudita</option>
                             </select>
                         </div>
+                        <label class="rules-checkbox">
+                            <input type="checkbox" id="acceptRulesRegister" required>
+                            <span>Acepto las <span class="rules-link" onclick="event.preventDefault(); showRulesModal();">reglas del juego, chat y alianzas</span></span>
+                        </label>
                         <button type="submit" class="btn-primary">Crear Nación</button>
                     </form>
                     <div class="auth-footer">
@@ -188,6 +213,7 @@
                     <button class="nav-btn" onclick="switchTab('alliances')">🛡️ Alianzas</button>
                     <button class="nav-btn" onclick="switchTab('diplomacy')">🌐 Diplomacia</button>
                     <button class="nav-btn" onclick="switchTab('war')">⚔️ Guerra</button>
+                    <button class="nav-btn" id="adminNavBtn" onclick="switchTab('admin')">👑 Admin</button>
                 </nav>
 
                 <div class="sidebar-stats">
@@ -508,6 +534,32 @@
                         </div>
                     </div>
                 </section>
+
+                <!-- TAB: ADMIN -->
+                <section id="admin" class="tab-content">
+                    <h2>👑 Panel de Administración</h2>
+                    <p class="section-desc">Modera jugadores, banea cuentas y gestiona el servidor.</p>
+                    <div class="diplo-grid">
+                        <div class="diplo-card">
+                            <h3>👥 Jugadores Registrados</h3>
+                            <p>Banea permanentemente por correo. No podrán volver con el mismo email.</p>
+                            <div id="adminUsersList"></div>
+                        </div>
+                        <div class="diplo-card">
+                            <h3>⛔ Usuarios Baneados</h3>
+                            <div id="adminBannedList"></div>
+                        </div>
+                        <div class="diplo-card">
+                            <h3>💬 Moderación de Chat</h3>
+                            <p>En el chat verás botones 🗑️ (borrar mensaje) y ⛔ (banear jugador) en cada mensaje.</p>
+                            <ul style="color:#bdc3c7;line-height:1.8;padding-left:20px">
+                                <li>El ban es permanente por correo electrónico</li>
+                                <li>El jugador baneado es expulsado al instante</li>
+                                <li>Puedes desbanear desde la lista de baneados</li>
+                            </ul>
+                        </div>
+                    </div>
+                </section>
             </main>
 
             <!-- CHAT MULTIJUGADOR (INYECTADO) -->
@@ -522,6 +574,43 @@
                     <button onclick="sendChatMessage()">▶</button>
                 </div>
             </aside>
+        </div>
+    </div>
+
+    <!-- MODAL DE REGLAS -->
+    <div id="rulesModal" class="rules-modal">
+        <div class="rules-box">
+            <h2>📜 Reglas de Rayo War</h2>
+            <p style="color:#bdc3c7">Lee y acepta las reglas antes de jugar.</p>
+
+            <h3>⚔️ Cómo funciona el juego</h3>
+            <ul>
+                <li>Construyes ciudades, produces recursos y reclutas un ejército.</li>
+                <li>Puedes atacar otras naciones desde el ranking en <strong>Guerra</strong>.</li>
+                <li><strong>Si ganas un ataque:</strong> conquistas todo (recursos, tropas, ciudades) y el enemigo pierde la partida.</li>
+                <li><strong>Si pierdes un ataque:</strong> tu nación cae y debes fundar una nueva.</li>
+                <li>En <strong>Diplomacia</strong> puedes comerciar, espiar, sabotear y desarrollar programas espacial/nuclear.</li>
+                <li>El uso de armas nucleares activa sanciones de la ONU.</li>
+            </ul>
+
+            <h3>💬 Reglas del Chat</h3>
+            <ul>
+                <li>Respeta a todos los jugadores. <strong>Prohibido</strong> insultos, acoso, racismo y contenido sexual.</li>
+                <li>No spam, no publicidad ni links maliciosos.</li>
+                <li>No compartas datos personales (teléfono, dirección, etc.).</li>
+                <li>Los administradores pueden <strong>borrar mensajes</strong> y <strong>banear cuentas permanentemente</strong>.</li>
+                <li>El ban impide volver a entrar con el mismo correo electrónico.</li>
+            </ul>
+
+            <h3>🛡️ Reglas de Alianzas</h3>
+            <ul>
+                <li>No puedes atacar a miembros de tu propia alianza.</li>
+                <li>Puedes enviar apoyo (recursos y tropas) solo a aliados.</li>
+                <li>Traicionar a tu alianza no está prohibido, pero puede tener consecuencias diplomáticas.</li>
+                <li>El nombre de alianza debe ser apropiado (sin insultos).</li>
+            </ul>
+
+            <button class="rules-accept-btn" onclick="acceptRulesFromModal()">✅ Acepto las Reglas</button>
         </div>
     </div>
 

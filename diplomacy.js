@@ -605,7 +605,6 @@ function getNuclearAttackBonus(nation) {
 }
 
 export {
-    TRADE_RESOURCES,
     resourceLabel,
     getResourceAmount,
     calcPower,
